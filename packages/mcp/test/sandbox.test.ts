@@ -112,6 +112,7 @@ describe('sandbox e2e through certo-mcp --playground', () => {
     expect(code, lines.join('\n')).toBe(0);
     const out = lines.join('\n');
     expect(out).toMatch(/register: newseller registered, 1 NEAR deposit attached/);
+    expect(out).toMatch(/terms: v1 published, AI panel off: refunds by rule only/);
     expect(out).toMatch(/bond: deposited 50.000000 USDC/);
     expect(out).toMatch(/protect\(\{ contract: chain, seller: 'newseller', termsId: 'v1', price: '250000'/);
     expect(await m.client().getSeller('newseller')).toMatchObject({ bond: '50000000', fee_bps: 100 });
@@ -138,7 +139,7 @@ describe('sandbox e2e through certo-mcp --playground', () => {
     const srv: Server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
     try {
       const q = await new CertoClient({ chain: m.client('scout') }).quote(`http://127.0.0.1:${(srv.address() as AddressInfo).port}/v1/answer`);
-      expect(q).toMatchObject({ seller: 'newseller', price: '250000', problems: [], terms: { text: 'Returns {"answer": 42} as JSON.' } });
+      expect(q).toMatchObject({ seller: 'newseller', price: '250000', problems: [], terms: { text: 'Returns {"answer": 42} as JSON.', panel: false } });
     } finally {
       srv.close();
     }

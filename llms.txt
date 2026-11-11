@@ -1,6 +1,6 @@
 # Certo
 
-> Paid HTTP API calls for AI agents with bonded refunds, on NEAR. The seller is paid in the buyer's own payment transaction; the seller's USDC bond covers a refund for a short window after each call (120 s by default). Errors and broken rules are refunded by rule; a well-formed but wrong answer goes to three NEAR AI TEE models whose signed votes the contract verifies.
+> Paid HTTP API calls for AI agents with bonded refunds, on NEAR. The seller is paid in the buyer's own payment transaction; the seller's USDC bond covers a refund for a short window after each call (120 s by default). Errors and broken rules are refunded by rule; if the seller's terms opt in, a well-formed but wrong answer goes to an experimental panel of three NEAR AI TEE models whose signed votes the contract verifies.
 
 ## Try it (local sandbox, no keys)
 - `npm ci && make playground` in this repo: keeps a sandbox, two sellers, the panel and a funded buyer running, and writes ~/.certo/playground.env
@@ -9,14 +9,14 @@
 - Same from a shell: `npx certo --playground quote <url>`, `npx certo --playground call <url>`, `npx certo --playground dispute <call_id>`
 
 ## MCP tools (all amounts in results are USDC decimal strings, fields ending in _usdc)
-- certo_quote {url}: look without paying: price, bond, free capacity, fee, record, refund window, terms, your dispute stake. Example: {"url":"http://127.0.0.1:PORT/v1/holders?token=NEAR&top=5"}
+- certo_quote {url}: look without paying: price, bond, free capacity, fee, record, refund window, terms, panel ("experimental" or "off": refunds by rule only), your dispute stake. Example: {"url":"http://127.0.0.1:PORT/v1/holders?token=NEAR&top=5"}
 - certo_call {url, method?, body?, max_price?}: pay and get the body, call_id, refund_window_until. Refused above CERTO_MAX_PRICE (default 1.00 USDC). Example: {"url":"...","max_price":0.5}
 - certo_dispute {call_id, kind?, offer_pct?, wait_s?}: get money back; waits (default 90 s) and returns the final outcome with refund_usdc. Example: {"call_id":"cheapfacts/9f0c..."}
 - Playground limits: the demo sellers sell only their example URL (anything else: 404 before payment, nothing charged); the playground panel replays recorded answers and knows only a 100% content offer on the two example URLs. Any other content dispute returns at once with state "no_panel" and the time the panel-timeout rule settles it (seller's offer refunded, stake back). Set NEARAI_API_KEY before `make playground` for a live panel
 - certo_status {call_id?, seller?}: open / released (seller kept it) / in_dispute / refunded / cured / unknown (never paid from here)
 
 ## Dispute kinds
-- content (default): body is valid but wrong for the terms. Sealed offer (offer_pct, default 100) vs the seller's offer; three AI jurors pick the closer one. Win: your offer refunded, stake back. Lose: stake forfeited, you get the seller's offer, your next stake doubles (up to 16x)
+- content (default; only with terms whose panel is on, experimental): body is valid but wrong for the terms. Sealed offer (offer_pct, default 100) vs the seller's offer; three AI jurors pick the closer one. Win: your offer refunded, stake back. Lose: stake forfeited, you get the seller's offer, your next stake doubles (up to 16x)
 - error: seller signed HTTP >= 500. Full refund by rule, no stake, one transaction
 - rule: body breaks a published rule (not JSON, missing required field, stale). Full refund by rule, no stake
 - non_delivery: paid, no valid response (TIMEOUT, NO_RECEIPT, RECEIPT_MISMATCH, BAD_RECEIPT_SIG). Seller cures (stake back, no refund) or you get a full refund after its answer deadline
@@ -36,7 +36,7 @@
 - NEAR_RPC_URL, NEAR_NETWORK, CERTO_CONTRACT, CERTO_TOKEN, BUYER_ACCOUNT, BUYER_PRIVATE_KEY, PANEL_URL, CERTO_MAX_PRICE, CERTO_STATE_DIR (default ~/.certo/calls/<NEAR_NETWORK>/<CERTO_CONTRACT>; call records and sealed-offer salts survive restarts; `make playground` clears its sandbox's records when it starts and stops)
 
 ## Sellers
-- `npx certo seller init --bond 50 --terms terms.txt`: receipt key, register (1 NEAR deposit), terms, bond, prints the protect() snippet; see examples/seller.ts and packages/seller/README.md
+- `npx certo seller init --bond 50 --terms terms.txt [--panel]`: receipt key, register (1 NEAR deposit), terms (refunds by rule only; --panel adds the experimental AI panel for content disputes), bond, prints the protect() snippet; see examples/seller.ts and packages/seller/README.md
 
 ## Docs
 - README.md, docs/DESIGN.md (full design), contracts/certo/src (the contract)
