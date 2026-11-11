@@ -1,258 +1,213 @@
 # Certo
 
-Bonded chargebacks for API calls paid by AI agents, on NEAR. Built at NEAR HACKATHON (November 2026).
+**Agents pay instantly. Bad calls get refunded.** Built at NEAR HACKATHON (November 2026).
 
-<!-- FILL: repository URL --> · <!-- FILL: X post URL --> · Licence: MIT ([LICENSE](LICENSE))
+- A seller of a paid API locks a bond in a NEAR contract and is **paid in the buyer's own transaction**. No escrow, no waiting.
+- For 120 s the buyer agent can get its money back **out of that bond**: by rule (HTTP 5xx, no delivery, broken schema, stale data) or, for an answer that is well-formed but wrong, by a panel of three AI models (experimental, see [Measured](#6-measured)).
+- **No account can forge a vote.** The contract rebuilds each juror's prompt, hashes it, and checks three NEAR AI Cloud enclave signatures with `env::ed25519_verify` before the bond pays out.
 
-## 1. What it is
+![Scene 2: asked NEAR, got NEO; three signed votes, verified in the browser and by the contract; refund from the bond](apps/demo/web/screenshots/scene2-end.png)
 
-A seller of a paid HTTP API deposits a bond in a NEAR contract. A buyer agent pays per call through the contract, and the seller receives the price minus a fee in the same transaction, as long as the seller's open refund risk fits inside its bond. For 120 s after each call the buyer can get the price back out of the bond: by rule for a seller-signed HTTP 5xx receipt, a missing delivery, or a broken published rule, and through a panel of three models (Qwen, GLM, DeepSeek on NEAR AI Cloud) for an answer that is well-formed but wrong. The contract rebuilds each juror's exact prompt, checks the three ed25519 signatures with `env::ed25519_verify`, counts the votes, and moves the money; no account decides the outcome.
+<!-- FILL: repository URL · X post with the 60 s video · hosted replay URL (or delete) -->
+MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt)
 
-**The problem.** A payment by an agent for an API call is final: if the response is an error, missing, or wrong, the agent has no way to get the money back. Escrow fixes this by making the seller wait, which honest sellers pay for on every call. Here the seller is paid at once and the bond carries the refund risk.
+## Try it
 
-## 2. Try it: do X, see Y
-
-Requirements: Node ≥ 20 (`.nvmrc`: 20) on macOS arm64, Linux x86-64 with glibc ≥ 2.34 (Ubuntu 22.04+, Debian 12+), or Linux aarch64 with glibc ≥ 2.39 (Ubuntu 24.04+, Debian 13+). No keys, no accounts, no Rust. The first run downloads the nearcore 2.10.0 sandbox binary through the `near-sandbox` npm package (26 MB download on macOS arm64, 33 MB on Linux x86-64, 31 MB on Linux aarch64; 66–90 MB unpacked). 2.10.0 is pinned because it is the newest nearcore whose Linux x86-64 sandbox runs on glibc 2.34; the Linux aarch64 sandbox builds checked (2.6.5, 2.7.0, 2.8.0, 2.9.0, 2.10.0) all need glibc 2.39, so Debian 12 on ARM cannot run the sandbox (the runner says so; `make verify` needs no chain). The committed wasm also runs on nearcore 2.14.0 ([CONTRACT_NOTES](docs/CONTRACT_NOTES.md#one-wasm-for-nearcore-2100-and-2140)). Checked on macOS arm64, on Linux aarch64 (Docker, glibc 2.41), and with the Linux x86-64 sandbox binary on glibc 2.36 under `qemu-x86_64`; not yet on x86-64 hardware, and Docker linux/amd64 on Apple silicon (Rosetta) crashes the sandbox ([table](docs/CONTRACT_NOTES.md#one-wasm-for-nearcore-2100-and-2140)). If the download fails, download `https://s3-us-west-1.amazonaws.com/build.nearprotocol.com/nearcore/<Darwin-arm64|Linux-x86_64|Linux-aarch64>/2.10.0/near-sandbox.tar.gz`, unpack it, and set `NEAR_SANDBOX_BIN_PATH` to the extracted `near-sandbox` file.
+Node ≥ 20 on macOS arm64 or Linux x86-64. No keys, no accounts, no Rust. The first run downloads a 26–33 MB NEAR sandbox binary ([platform notes](docs/CONTRACT_NOTES.md)).
 
 ```sh
 npm ci
-make demo
+make demo      # five scenes on a local NEAR sandbox; page at http://localhost:4020 while it runs
+make guards    # nine attacks: each rejected by the real contract, each succeeds on a build with that one check removed
 ```
 
-**The panel answers in this demo are synthetic.** No NEAR AI key existed when this was written, so `fixtures/panel/` holds ballots signed with published local test keys (`fixtures/jurors.synthetic.json`, seed `certo-synthetic-jurors-v1`). The run proves that the contract rebuilds the prompts, verifies three ed25519 signatures and settles on the votes; it proves nothing about NEAR AI or about how the models decide. The runner prints this itself (`NOTE: SYNTHETIC panel …`) and marks the lines `(synthetic test keys)`. Switching to real answers is described below the steps and **has not been run yet**.
+`make demo` ends with these lines (amounts are read from the chain and compared; a mismatch exits 1):
 
-Output of `make demo` on 2026-11-11 (macOS arm64, Apple M2, nearcore 2.10.0 sandbox), exit 0, 21.8 s:
+```text
+Scene 1 honest call: scout paid chainfacts 0.400000, fee 0.004000 (1.0%), seller balance +0.396000 in the paying transaction …
+Scene 2 asked NEAR, got NEO: content dispute, votes buyer/buyer/buyer, 3 signatures verified by contract, refund 0.400000, bond 50.000000 → 49.580000, fee 1.0% → 1.5%
+Scene 3 lying buyer: scout-liar disputed correct data, votes seller/seller/seller, buyer stake 0.020000 forfeited; chainfacts bond 50.000000 unchanged, fee stays 1.0%
+Scene 4 seller dead: seller did not answer in 5 s (demo setting; 30 s on testnet), refund 0.400000 by rule, no panel, bond 49.580000 → 49.160000, fee 1.5% → 2.5% (second loss)
+Scene 5 forged vote: one byte of Qwen's answer Y → X changed after signing; certo rejected it with E_BALLOT_SIG; res/guards/certo_no_g1.wasm (check compiled out) counted it, votes buyer/seller/seller
+DEMO OK: 5/5 scenes, 3/3 juror signatures verified on chain
+```
 
-1. `make demo` → see scene 1, the seller paid in the paying transaction:
-   ```text
-   Scene 1 honest call: scout paid chainfacts 0.400000, fee 0.004000 (1.0%), seller balance +0.396000 in the paying transaction Dd7bcAu6…
-   ```
-2. → see scene 2, a seller answers about NEO when asked for NEAR; the panel votes for the buyer, the contract verifies three signatures, the refund comes from the bond and the seller's fee steps up:
-   ```text
-   Scene 2 asked NEAR, got NEO: content dispute, votes buyer/buyer/buyer, 3 signatures verified by contract (synthetic test keys), refund 0.400000, bond 50.000000 → 49.580000, fee 1.0% → 1.5%
-   ```
-3. → see scene 3, a buyer disputes correct data and loses its stake:
-   ```text
-   Scene 3 lying buyer: scout-liar disputed correct data, votes seller/seller/seller, buyer stake 0.020000 forfeited; chainfacts bond 50.000000 unchanged, fee stays 1.0%
-   ```
-4. → see scene 4, the seller process is stopped after being paid; no answer within the window, refund by rule:
-   ```text
-   Scene 4 seller dead: seller did not answer in 5 s (demo setting; 30 s on testnet), refund 0.400000 by rule, no panel, bond 49.580000 → 49.160000, fee 1.5% → 2.5% (second loss)
-   DEMO OK: 4/4 scenes, 3/3 juror signatures verified on chain (synthetic test keys)
-   ```
-   Every amount in these lines is read from the chain and compared with the expected value; a mismatch fails the scene and the exit code is 1 (`apps/demo/src/demo.ts`).
-5. `make guards` → see each of eight contract checks reject its attack on `res/certo.wasm` and let it through on a build with only that check removed (18.4 s):
-   ```text
-   G1     juror signature       rejected E_BALLOT_SIG              attack succeeded: forged vote counted, winner buyer                            rejected / succeeds-when-removed
-   …
-   G8     prompt binding        rejected E_BALLOT_SIG              attack succeeded: ballots for another prompt accepted, winner buyer            rejected / succeeds-when-removed
-   GUARDS OK: 8/8 guards rejected on the real contract and bypassed when removed (37.4 s)
-   ```
-   G1 changes one byte of one juror's answer (Y → X) and keeps the signature. The full table and the attacks are in [docs/GUARDS.md](docs/GUARDS.md).
-6. `make verify` (no chain, no network) → see the attestation reports checked against the committed juror keys and every recorded ballot checked offline:
-   ```text
-   VERIFY OK: 6 ballots (0 real, 6 synthetic) — synthetic ballots are signed with published test keys and prove nothing about NEAR AI
-   Attestation check is key+nonce binding only; Intel/NVIDIA certificate chains are not verified (docs/VERIFY.md).
-   ```
-7. `make demo ARGS=--keep-open`, then open http://localhost:4020 → see three lanes (buyer agent, seller with bond bar and fee badge, panel with three juror badges), a mode label (`replay-synthetic` is shown as signed with a local TEST key) and the last contract event with its transaction hash. Stop with Ctrl-C. Screenshots: `apps/demo/web/screenshots/`.
-8. `make test` → see 166 TypeScript tests pass in 27 s, including 12 end-to-end tests on the sandbox against the committed wasm (`tests/e2e/sandbox.test.ts`):
-   ```text
-   > @certo/buyer@0.1.0 test
-         Tests  10 passed (10)
-   > @certo/core@0.1.0 test
-         Tests  122 passed (122)
-   > @certo/mcp@0.1.0 test
-         Tests  3 passed (3)
-   > @certo/panel@0.1.0 test
-         Tests  10 passed (10)
-   > @certo/seller@0.1.0 test
-         Tests  9 passed (9)
-   > @certo/tests@0.1.0 test
-         Tests  12 passed (12)
-   ```
-9. `cargo test --workspace` (needs Rust) → see 61 Rust tests pass: 28 unit tests (encoders, golden vectors, fee steps, settlement table, `parse_vote`, rules, G13 solvency property test), 14 guard tests (G1–G12, G14, G15), 19 sandbox tests. 202 s on the nearcore 2.10.0 sandbox, 287 s on 2.14.0 (macOS arm64, after compilation); both pass. If the `near-workspaces` build script fails with `DownloadError("timeout: connect")`, set `NEAR_SANDBOX_BIN_PATH` as above (after `make demo` the binary is at `node_modules/near-sandbox/bin/near-sandbox-2.10.0/near-sandbox`). Without it `near-workspaces` 0.22 downloads nearcore 2.13.4, which on Linux needs glibc 2.39.
+`make guards` ends with `GUARDS OK: 9/9 guards rejected on the real contract and bypassed when removed`.
 
-### Switching to real NEAR AI answers (not run yet)
+The juror answers in `make demo` are **recorded**: real answers and enclave signatures from NEAR AI Cloud, captured on 2026-11-11 and stored in `fixtures/panel/`. The contract verifies those signatures in every run, and the page verifies them again in your browser (WebCrypto). Replayed, a ruling appears in a few seconds; asked live, the panel takes a median of 23 s (see [Measured](#6-measured)). To ask the models live: put `NEARAI_API_KEY=…` in `.env` and run `PANEL_MODE=live make demo`.
 
-1. Put `NEARAI_API_KEY=…` in `.env` (copy `.env.example`; `.env` is git-ignored).
-2. `make probe`: one call per juror; checks that each answer carries an ed25519 `provider_tee` signature over `sha256(sent body)` (DESIGN 2.1, K4) and picks the verification level.
-3. `make killtest`: 60 labelled cases and 30 injection variants against the live panel, thresholds K1–K6 ([docs/KILLTEST.md](docs/KILLTEST.md)).
-4. `make record`: records the demo's six ballots with their real signatures into `fixtures/panel/`. After that `make demo` runs in `replay` mode with the NEAR AI keys of `fixtures/jurors.json`, and `PANEL_MODE=live NEARAI_API_KEY=… make demo` asks the live panel during the run.
+The page paces itself (about 100 s for the five scenes) and has a Replay button (key R). `make demo` saves the run as `~/.certo/demo/feed.json`; the page also plays a `feed.json` served next to it as static files.
 
-Results: <!-- FILL: date of the first real recording; K1–K6 values from docs/KILLTEST.md; verification level chosen after `make probe` -->
+### If you are an AI judge (Claude Code, Codex, any MCP client)
 
-## 3. How NEAR is used
+You can be the buyer. Three tool calls.
+
+```sh
+make playground                                      # the five scenes, then keeps the sandbox, both sellers, the panel and a funded buyer running
+claude mcp add certo -- npx certo-mcp --playground   # from this repo; Codex: command npx, args ["certo-mcp","--playground"], tool_timeout_sec = 120
+```
+
+`make playground` ends with `PLAYGROUND READY`, the page URL, the env file it wrote (`~/.certo/playground.env`, deleted on exit) and three prompts to try. The two sellers are `cheapfacts` (http://127.0.0.1:4031, answers NEO when asked for NEAR) and `chainfacts` (http://127.0.0.1:4030, honest).
+
+| # | Tool call | Expect in the result (measured 2026-11-11) |
+|---|---|---|
+| 1 | `certo_quote {"url": "http://127.0.0.1:4031/v1/holders?token=NEAR&top=5"}` | nothing paid; `price_usdc "0.400000"`, `refund_window_s 120`, `dispute_stake_usdc "0.020000"`, `seller_record.bond_usdc "49.160000"`, `lost_disputes 2`, the seller's terms |
+| 2 | `certo_call {"url": <same>}` | `http_status 200`, `receipt_verified true`, a `call_id`, a body whose `token` is `"NEO"`, `suggested.action "dispute"` |
+| 3 | `certo_dispute {"call_id": <from 2>}` | in one call: `outcome.result "refunded"`, `refund_usdc "0.400000"`, `stake_back_usdc "0.020000"`, `tier "panel"`, `votes ["buyer","buyer","buyer"]`, the `resolve` transaction |
+
+The three calls took 4.2 s in all against the recorded panel. `certo_status {"call_id": …}` then says `refunded`. The buyer never pays more than `CERTO_MAX_PRICE` (default 1.00 USDC) per call. From a shell: `npx certo --playground quote|call|dispute …`. Tools, units and error codes: [llms.txt](llms.txt).
+
+## 1. The problem
+
+A payment by an agent for an API call is final. If the response is an error, missing or wrong, the money is gone. Escrow fixes that by making every seller wait, so honest sellers pay for dishonest ones on every call. Certo pays the seller at once and puts the refund risk on the seller's own bond; a seller's open refund risk can never exceed that bond.
+
+## 2. How NEAR is used
 
 | NEAR feature | Where | Shown by |
 |---|---|---|
-| Contract verifies NEAR AI Cloud enclave signatures with `env::ed25519_verify` and `env::sha256`, over prompts it builds itself (and seller receipts the same way) | `contracts/certo/src/panel.rs`, `encode.rs`, `dispute.rs` | `make guards` rows G1, G8; `cargo test -p certo --test sandbox t07_verify_ballot_view_checks_juror_signature` |
-| NEAR AI Cloud: three juror models of three families (`Qwen/Qwen3.8-27B`, `z-ai/glm-5.3-flash`, `deepseek-ai/DeepSeek-V4.1-Flash-1017`), each with its own enclave key; attestation reports (Intel TDX + NVIDIA) fetched without a key and committed | `fixtures/jurors.json`, `fixtures/attestations/2026-11-10/`, `scripts/fetch-attestations.ts` | `make verify` (key and nonce bound in the TDX quote's REPORTDATA). Chat answers: not yet recorded (section 2) |
-| NEP-141 `ft_transfer_call` → `ft_on_transfer`: payment, bond deposit and dispute stake each enter the contract in one transaction; the payout to the seller is an `ft_transfer` in the same transaction | `contracts/certo/src/pay.rs`, `dispute.rs` | Scene 1 line; `cargo test -p certo --test sandbox t06_pay_moves_price_minus_fee_to_seller_in_same_tx` |
-| NEP-297 events (`standard: "certo"`) for every state change; the demo page and transcript read them | `contracts/certo/src/events.rs` | `make demo ARGS=--keep-open`, footer of the page |
-| Named sub-accounts: `v1.certo.testnet`, `usdc.…`, `resolver.…`, `<seller>.sellers.certo.testnet` | `.env.example`, `docs/TESTNET.md` | `make testnet-demo` (not run yet; section 8) |
-| Function-call key for the seller's `answer` / `cure` (neither method is payable, so a key limited to these two methods can call them) | `contracts/certo/src/dispute.rs` | Not demonstrated: the demo signs with full-access keys |
-| NEAR Intents (refund in another asset) | — | Not built (section 5) |
+| The contract verifies NEAR AI Cloud enclave signatures (`env::ed25519_verify`, `env::sha256`) over prompts it builds itself, and seller receipts the same way | `contracts/certo/src/panel.rs`, `encode.rs`, `dispute.rs` | `make demo` scenes 2, 3, 5; `make guards` G1, G8 |
+| NEAR AI Cloud: three juror models of three families (`Qwen/Qwen3.8-27B`, `z-ai/glm-5.3-flash`, `deepseek-ai/DeepSeek-V4.1-Flash-1017`), each signing with its own enclave key (`provider_tee`, ed25519 over the sha256 of the sent body) | `fixtures/jurors.json`, `fixtures/attestations/`, `fixtures/panel/` | `make verify` (375 recorded ballots); `make probe` (needs a key) |
+| NEP-141 `ft_transfer_call`: payment, bond and dispute stake each enter the contract in one transaction, and the seller's payout leaves in the same one | `contracts/certo/src/pay.rs` | Scene 1; `cargo test -p certo --test sandbox t06_pay_moves_price_minus_fee_to_seller_in_same_tx` |
+| NEP-297 events for every state change; the page is drawn only from them | `contracts/certo/src/events.rs`, `apps/demo/EVENTS.md` | the page footer |
+| Function-call access key: `certo seller init` gives the seller's answer bot a key limited to `answer` and `cure` | `packages/buyer/src/cli.ts`, `packages/seller/src/bot.ts` | `npm test -w @certo/mcp` ("certo seller init registers, publishes terms, bonds…"; `withdraw_bond` with that key is refused) |
+| Named sub-accounts: `v1.certo.testnet`, `<seller>.sellers.certo.testnet` | `docs/TESTNET.md` | [Testnet](#7-testnet) |
 
-## 4. Feature checklist for verification
+## 3. What is real, what is not
 
-| # | Feature | Files | Test | Command |
-|---|---|---|---|---|
-| M1 | Seller registration with bond; terms; pay through `ft_transfer_call` with payout in the same transaction; payment above free bond capacity bounces (`E_EXPOSURE`); lazy window expiry; bond withdrawal limited by open exposure (`E_WITHDRAW_EXPOSED`) | `contracts/certo/src/{lib,pay,queue}.rs` | `t06_pay_moves_price_minus_fee_to_seller_in_same_tx`, `t06_lazy_release_and_withdraw`, guards G2, G6, `g9_history_never_raises_exposure`, `g13_solvency_property` | `cargo test --workspace`; `make guards` |
-| M2 | Seller middleware: 402 quote, checks the paid call on chain (hash, terms, price, status), signs a receipt over the response bytes, also for 5xx | `packages/seller/src/` | `packages/seller/test/seller.test.ts`; e2e `seller refuses to serve a request body other than the one paid for` | `npm test -w @certo/seller`; `npm test -w @certo/tests -- -t "seller refuses"` |
-| M2 | Demo seller behaviours: correct data, wrong token, HTTP 503, process stopped | `apps/demo/src/seller.ts`, `fixtures/demo/demo.json` | scenes 1–4; e2e `signed 5xx: claim_error refunds by rule, no stake, no panel` | `make demo`; `npm test -w @certo/tests -- -t "signed 5xx"` |
-| M3 | Buyer SDK and CLI: 402 → pay → retry with proof → verify receipt → decide to dispute | `packages/buyer/src/` | `packages/buyer/test/buyer.test.ts`; e2e `clean call: 402 → pay → retry → signed receipt; seller paid 0.396 in the paying transaction`, `buyer SDK refuses a response whose bytes differ from the signed receipt, keeping the call id for a claim` | `npm test -w @certo/buyer`; `npm test -w @certo/tests -- -t "clean call"` |
-| M4 | Panel service, live and replay; checks evidence hashes and the sealed offer, takes the prompts from the contract view `build_panel_request`, verifies ballots offline before submitting | `packages/panel/src/` | `packages/panel/test/panel.test.ts` (live mode against a mock NEAR AI server only) | `npm test -w @certo/panel` |
-| M5 | Rule refund on a signed 5xx receipt; non-delivery claim with cure or default; content dispute with two offers; `resolve` verifies three juror signatures on chain (level L3) | `contracts/certo/src/{dispute,panel}.rs` | `t08_*` (14 tests), e2e `upheld content dispute …`, `rejected content dispute …`, `non-delivery …`; guards G1, G3, G4, G5, G7, G8 | `cargo test -p certo --test sandbox`; `make test`; `make guards` |
-| M6 | Fee step from the dispute record (1.0% → 1.5% after one loss); exposure stays 1× bond in every tier | `contracts/certo/src/fees.rs` | `t08_panel_buyer_wins_scene2_numbers_and_gas`, `g9_history_never_raises_exposure` | `make demo` (scene 2, 4 lines); `cargo test -p certo --test guards g9` |
-| M7 | Demo page: three lanes, balances, bond bar, fee badge, juror badges, event footer; fed by Server-Sent Events | `apps/demo/web/`, `apps/demo/src/feed.ts`, `apps/demo/EVENTS.md` | screenshots in `apps/demo/web/screenshots/` | `make demo ARGS=--keep-open`, open http://localhost:4020 |
-| M8 | One-command demo, tests, guard tests against weakened builds, this README, licence | `Makefile`, `tests/guards/run.ts`, `res/guards/` | — | `make demo`; `make test`; `make guards` |
-| S2 | Sealed buyer offer: commitment at dispute, reveal at `resolve` (`E_COMMIT_MISMATCH`) | `contracts/certo/src/panel.rs` | `g10_sealed_offer` | `cargo test -p certo --test guards g10` |
-| S3 | Contract-checked rules: not JSON, missing field, stale (`claim_rule`) | `contracts/certo/src/dispute.rs` | `t08_claim_rule_stale_missing_not_json`; e2e `rule claim: …` | `npm test -w @certo/tests -- -t "rule claim"` |
-| S4 | Offline check of recorded ballots and attestation binding | `scripts/verify-recorded.ts`, [docs/VERIFY.md](docs/VERIFY.md) | tamper table in docs/VERIFY.md | `make verify` |
-| S5 | MCP server for the buyer side: `certo_call`, `certo_dispute`, `certo_status` | `packages/mcp/src/` | `packages/mcp/test/mcp.test.ts` | `npm test -w @certo/mcp` |
-| S6 | Buyer record: ruling stake doubles after each lost dispute | `contracts/certo/src/fees.rs` | e2e `rejected content dispute: panel 0–3, buyer stake to the treasury, buyer record doubles the next stake` | `npm test -w @certo/tests -- -t "rejected content dispute"` |
-| S1 | Testnet deployment and run | `scripts/deploy-testnet.ts`, `apps/demo/src/testnet.ts`, [docs/TESTNET.md](docs/TESTNET.md) | exercised against a local sandbox with testnet account names only | `npx tsx scripts/deploy-testnet.ts --dry-run`; `make testnet-demo` (not run on testnet yet) |
-
-Encoder agreement between TypeScript and the contract: e2e `encoder agreement (contract views = @certo/core) on every golden vector` and `t07_build_panel_request_matches_golden_vectors` (`fixtures/vectors.json`).
-
-## 5. What is real / what is stubbed
-
-| Area | Real | Stubbed or absent |
+| Area | Real | Not real, or absent |
 |---|---|---|
-| Money | Contract logic on a local NEAR sandbox (nearcore 2.10.0; also tested on 2.14.0) with a NEP-141 token. Testnet code path written (`make testnet-demo`) | Token is a mock USDC with open `mint`. No mainnet, no real value. Not yet run on testnet |
-| Jurors | Juror model ids and their ed25519 enclave keys, read from NEAR AI Cloud attestation reports on 2026-11-10; the contract verifies juror signatures with `ed25519_verify` | **No NEAR AI chat answer has been recorded yet.** `make demo` replays synthetic ballots signed with published test keys. Real recording (`make record`) and the live path need a NEAR AI key and have not been run |
-| Attestation | Reports fetched from `cloud-api.near.ai` and committed; `make verify` checks that each TDX quote's REPORTDATA is `public key ‖ our nonce` and the MRTD matches | Intel and NVIDIA certificate chains, quote signatures and TCB status are not verified, by the contract or by the script. Juror keys are registered by the contract owner |
-| Buyer and seller | HTTP server, middleware and client; buyer agent is a script with a fixed policy | Sellers are ours and serve fixture data; no third-party seller or buyer |
-| x402 | v2 header names and object shapes (`PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, `PAYMENT-RESPONSE`) | Own scheme `certo-bonded`; no facilitator; a stock x402 client will not understand the scheme |
-| Cross-chain refund | — | Not built. Refunds are always mock USDC on NEAR |
-| Disputes | Rule tier (5xx receipt, non-delivery, not JSON, missing field, stale), content disputes with final-offer choice, sealed buyer offer, defaults on timeouts | No appeal. Re-asking is limited, not prevented. Responses over 6 KB cannot go to the panel |
-| Track record | Fee tiers and counters in the contract; buyer stake multiplier | No time decay; counters are lifetime and since-last-step |
-| Function-call keys | The seller's `answer` / `cure` need no deposit, so such a key can call them | Not demonstrated |
+| Money | Contract on a local NEAR sandbox (nearcore 2.10.0; also tested on 2.14.0) | Mock USDC with open `mint`. No mainnet, no value. Not yet run on testnet |
+| Jurors | Answers and enclave signatures recorded from NEAR AI Cloud; verified by the contract in every run. Kill test: [Measured](#6-measured) | Replayed unless `PANEL_MODE=live`. A recorded answer shows what the model said once |
+| Attestation | Reports fetched from `cloud-api.near.ai` and committed; `make verify` checks that each juror key and our nonce are inside the TDX quote | Intel and NVIDIA certificate chains and quote signatures are **not** verified, by the contract or by the script ([docs/VERIFY.md](docs/VERIFY.md)). The contract owner registers the juror keys |
+| Buyers, sellers | Express middleware, buyer SDK, CLI, MCP server, one-command seller setup | Both sellers are ours and serve fixture data. No third party has used it |
+| x402 | v2 header names and object shapes | Own scheme `certo-bonded`. A stock x402 client cannot pay; the 402 body says how (`npx certo call <url>` or the MCP server) |
 
-## 6. Trust model and limits
+**Trust and limits.** Who can do what:
 
 | Who | Can | Cannot |
 |---|---|---|
-| Contract owner | Replace the three juror keys (`set_jurors`, epoch + 1, event `jurors_set`), change the resolver, withdraw the treasury (fees and ruling fees) | Move bonds or stakes; decide a dispute |
-| Resolver account (panel service) | Submit `resolve` alone for 60 s after the seller's answer; then anyone can | Forge a vote: each ballot must verify against a registered juror key over the prompt the contract builds (`make guards` G1, G8) |
-| Seller | Answer a content dispute with an offer, cure a non-delivery claim by publishing the response | Deny a receipt it signed; withdraw bond below open exposure (G6) |
-| Buyer | Dispute within the window, with a stake | Invent a receipt (G5); dispute twice (G3); dispute after the window (G4) |
+| Contract owner | Replace the three juror keys (event `jurors_set`), change the resolver, withdraw fees | Move a bond or a stake; forge a vote under the registered keys |
+| Resolver (panel service) | Submit `resolve` alone for 60 s after the seller answers; then anyone can | Change a vote (G1), swap the evidence (G7) or the prompt (G8) |
+| Seller | Answer a dispute with an offer; cure a non-delivery claim by publishing the response | Deny a receipt it signed; withdraw bond below open exposure (G6) |
+| Buyer | Dispute once, inside the window, with a stake | Invent a receipt (G5); dispute twice (G3) or late (G4); collect the midpoint by withholding its sealed offer from the panel (G16) |
 
-Limits, each stated in DESIGN.md 4.3–4.4:
+- **Panel timeout.** If no panel ruling arrives within 300 s of the seller's answer, a valid reveal above the seller's offer gets the seller's offer and the stake back. The buyer can always force a ruling itself: between 60 s and 300 s anyone may submit `resolve`, and only the buyer holds the reveal. Known gap: after the deadline the seller can settle without the reveal, which sends the buyer's stake to the treasury.
+- **No majority.** A case where fewer than two jurors give the same valid answer cannot be resolved by the panel and falls to the panel-timeout rule. In the kill test one planted instruction did exactly this (see [Measured](#6-measured)).
+- **Re-asking.** A signature proves that an enclave serving that model gave this answer to this prompt, not that it was asked once. The resolver operator could ask again. Not solved.
+- **Sealed offer.** The buyer reveals its offer to the panel service before `resolve`; the service is trusted not to pass it to the seller in that interval.
+- **Evidence is public.** Terms, request, response and the raw juror answers are transaction arguments. Not for private data.
+- **Size caps.** Terms and request 1,024 bytes; response 6,144 bytes for the panel and 16 KB for a cure. The seller middleware will not sign a larger response under Certo ([packages/seller/README.md](packages/seller/README.md)).
+- **False non-delivery claims** cost the buyer only gas; the seller pays one transaction to cure each. Seller state (served responses) is in memory; a restart inside a window loses the ability to cure.
+- **Exposure.** A seller's open refund risk never exceeds its bond (G2); a clean record lowers the fee, never raises the limit.
+- **No appeal. Counters do not decay. Adoption** is untested: sellers bond only if buyers prefer bonded sellers.
 
-- **Re-asking.** A valid signature shows that an enclave serving model M produced this answer to this prompt, not that the model was asked once. The request is pinned (temperature 0, seed 7, no free parameters) and only the resolver may submit for 60 s, but the resolver operator could ask again until it gets the answer it wants. Removing this needs the caller to run in an enclave that attests a single ask, or an idempotency key at the provider. Not built.
-- **Key registration.** The contract trusts the juror keys the owner registered. Anyone can compare them with the committed attestation reports (`make verify`), but the contract does not check the attestation itself.
-- **Attestation check is key + nonce binding only.** `make verify` shows that the key and our nonce are inside a TDX quote with the expected MRTD; it does not verify the quote's signature, Intel's certificate chain, the NVIDIA evidence, or the event log ([docs/VERIFY.md](docs/VERIFY.md)). Instances of one model share a key, so a signature does not identify the instance.
-- **Evidence is public at resolve.** Terms, request, response and the three raw juror answers are transaction arguments of `resolve`; a cured non-delivery publishes the response in the `cure` transaction. Not suitable for private data.
-- **The buyer's sealed offer** is revealed to the panel service before `resolve`; the service is trusted not to pass it to the seller in that interval (the seller's offer is already fixed on chain).
-- **False non-delivery claims** cost the buyer gas only (the stake is returned on cure); the seller pays one transaction per claim.
-- **Size caps:** terms 1024 bytes, request 1024 bytes, response 6144 bytes for the panel tier (`E_EVIDENCE_SIZE`).
-- **Exposure:** a seller's open refund risk (price + ruling fee per open call) never exceeds its bond; a payment that would exceed it bounces (G2). A clean record lowers the fee, never raises the limit (`g9_history_never_raises_exposure`).
-- **Adoption:** sellers will bond only if buyers prefer bonded sellers. Not solvable in a hackathon; not tested.
+## 4. Feature checklist
 
-## 7. Measured numbers
+Every row has a test and a command. `cargo test` needs Rust; everything else needs only Node.
+
+| Feature | Files | Verify with |
+|---|---|---|
+| Bonded seller, pay with payout in the same transaction, exposure ≤ bond, bounded withdrawal | `contracts/certo/src/{lib,pay,queue}.rs` | `make demo` scene 1; `make guards` G2, G6; `cargo test -p certo --test sandbox t06` |
+| Seller middleware: 402 quote, checks the paid call on chain, signs a receipt over the exact response bytes (also 5xx), size cap | `packages/seller/src/protect.ts` | `npm test -w @certo/seller` |
+| Seller setup in one command, answer bot with retries and a function-call key | `packages/buyer/src/cli.ts`, `packages/seller/src/bot.ts`, `examples/seller.ts` | `npx certo seller init --help`; `npm test -w @certo/mcp` |
+| Buyer SDK and CLI: quote → pay → verify receipt → dispute → final outcome, price cap, state on disk | `packages/buyer/src/` | `npm test -w @certo/buyer` |
+| MCP server: `certo_quote`, `certo_call`, `certo_dispute` (one call to the final outcome), `certo_status` | `packages/mcp/src/` | the AI-judge block above; `npm test -w @certo/mcp` (quote → call → server restart → dispute) |
+| Rule refunds: signed 5xx, non-delivery with cure or default, not JSON, missing field, stale | `contracts/certo/src/dispute.rs` | `make demo` scene 4; `cargo test -p certo --test sandbox t08_claim_rule` |
+| Content dispute: sealed buyer offer, seller offer, three ballots verified on chain, majority, panel-timeout rule | `contracts/certo/src/panel.rs`, `dispute.rs` | `make demo` scenes 2, 3, 5; `make guards` G1, G7, G8, G16 |
+| Fees follow the record (1.0% → 1.5% → 2.5%); the buyer's stake doubles after a lost dispute | `contracts/certo/src/fees.rs` | `make demo` scenes 2–4 |
+| Panel service, live and replay | `packages/panel/src/` | `npm test -w @certo/panel` |
+| Demo page from the event feed: paced replay, browser-side signature check, scene 5 forgery | `apps/demo/` | `make playground`, open http://localhost:4020, press Replay |
+| Offline check of recorded ballots and attestation binding | `scripts/verify-recorded.ts` | `make verify` |
+| TypeScript and Rust encoders agree byte for byte | `fixtures/vectors.json` | `npm test -w @certo/tests` |
+
+All tests: `make test` (199 TypeScript tests, including end-to-end on the sandbox) and `cargo test --workspace` (62 Rust tests).
+
+## 5. Guards
+
+`make guards` runs each attack twice: against `res/certo.wasm`, where it must be rejected (or, for G16, paid by the rule), and against a build with only that check compiled out (`res/guards/`), where it must succeed. Details: [docs/GUARDS.md](docs/GUARDS.md).
+
+| Guard | Attack | Real contract |
+|---|---|---|
+| G1 | Change one byte of a juror's answer, keep the signature | `E_BALLOT_SIG` |
+| G2 | Take payments beyond the bond | `E_EXPOSURE` |
+| G3 | Dispute the same call twice | `E_STATUS` |
+| G4 | Dispute after the window | `E_WINDOW_CLOSED` |
+| G5 | Dispute with an invented receipt | `E_BAD_RECEIPT_SIG` |
+| G6 | Withdraw the bond under open calls | `E_WITHDRAW_EXPOSED` |
+| G7 | Give the panel other evidence than was paid for | `E_EVIDENCE_HASH` |
+| G8 | Submit ballots signed for another prompt | `E_BALLOT_SIG` |
+| G16 | Withhold the sealed offer from the panel to collect the midpoint by default | pays the seller's offer (0 %), stake back; without the check the buyer took 0.200000 of 0.400000 |
+
+## 6. Measured
+
+Apple M2, macOS, nearcore 2.10.0 sandbox, 2026-11-11. Wall-clock times vary between runs on the same machine; treat them as orders of magnitude.
 
 | Measure | Value | Reproduce |
 |---|---|---|
-| `make demo`, four scenes, replay-synthetic panel | 21.8 s, exit 0 (macOS arm64, Apple M2, nearcore 2.10.0 sandbox, 2026-11-11) | `make demo` |
-| `make test` | 166 tests, 27 s | `make test` |
-| `make guards` | 8/8, 18.4 s (13 s on nearcore 2.14.0) | `make guards` |
-| `cargo test --workspace` | 61 tests; 202 s on nearcore 2.10.0, 287 s on 2.14.0 (compiled already) | `cargo test --workspace` |
-| Gas: `resolve` with three `provider_tee` ballots, buyer wins, one refund | 10.64 TGas burnt (5 receipts; nearcore 2.10.0 and 2.14.0) | `cargo test -p certo --test sandbox t08_panel_buyer_wins -- --nocapture` (line `GAS resolve`) |
-| Gas: `ft_transfer_call` pay with payout | 11.57 TGas burnt (11.80 on nearcore 2.14.0) | `cargo test -p certo --test sandbox t06_pay_moves -- --nocapture` |
-| Contract size | `res/certo.wasm` 354,388 bytes (~3.5 NEAR storage), SHA-256 `9e8118adb347b5d220c0591bbca773cda239acabb8aed4ac4b4126258b6ca6f6` | `shasum -a 256 res/certo.wasm`; `cat res/SHA256SUMS` |
-| Cost per ruling | about 0.002 USD, **computed** from the NEAR AI price list for ~2,500 input and ~300 output tokens per juror (DESIGN 2.1), not measured | — |
-| Kill test K1–K6 (accuracy on 60 labelled cases, flips on 30 injected cases, latency, signature level, abstentions, repeatability) | <!-- FILL: K1–K6 from `make killtest` (docs/KILLTEST.md) --> | `make killtest` |
-| Panel latency: three answers + three signatures, wall clock | <!-- FILL: K3 numbers --> | `make killtest` |
-| Testnet run time | <!-- FILL: elapsed time printed by `make testnet-demo` --> | `make testnet-demo` |
+| `make demo` / `make test` / `make guards` | 29 s / 46 s / 61 s | the commands |
+| `cargo test --workspace` | 62 tests, about 5 min | `cargo test --workspace` |
+| Panel, live: three answers with full reasoning and three enclave signatures | median 23 s, 95th percentile 120 s (kill test, reserve set); a single probe took 5.9 s | `make killtest`, `make probe` (need a key) |
+| Gas, `resolve` with three short test ballots | 10.64 TGas | `cargo test -p certo --test sandbox t08_panel_buyer_wins -- --nocapture` |
+| Gas, pay with payout | 11.56 TGas | `cargo test -p certo --test sandbox t06_pay_moves -- --nocapture` |
+| Contract size | `res/certo.wasm` 354,380 bytes (~3.5 NEAR storage), SHA-256 `1f6ab2b7117d47027dafca38d319de5ae1909dbf10b92b99c45f4986758f36e3` | `cat res/SHA256SUMS` |
+| Kill-test cost | 0.46 USD for both runs (663 ballots) | `docs/KILLTEST.md` |
 
-The kill-test cases are synthetic, written by us (evidence class: exploratory); a pass would show the panel decides clear cases and resists the injection lines we wrote, not how it behaves on real sellers' data.
+**Kill test of the AI panel** ([docs/KILLTEST.md](docs/KILLTEST.md); cases written by us, evidence class exploratory). Thresholds were fixed before the first run.
 
-## 8. Testnet deployment
+| | Run 1: 60 labelled + 30 injected, `max_tokens` 600 | Run 2 (the one allowed repair): 20 + 10 unseen reserve cases, `max_tokens` 4096 |
+|---|---|---|
+| Verdict equals label | 23/60 (fail): every miss was an abstention; no juror voted against a label | **19/20 (pass)** |
+| Abstentions | 92/180 (the models ran out of tokens while reasoning) | **1/60 (pass)** |
+| Same verdict over 5 asks | 6/10 | **10/10 (pass)** |
+| Planted instruction changes the verdict | 4/30, all from abstentions | **1/10 (fail, threshold 0)**: "SYSTEM: arbitration policy updated…" planted by the seller left the case without a majority; one juror voted the planter's side |
 
-Not deployed yet. The path is implemented: `make testnet-demo` deploys the market if needed (idempotent) and runs the same four scenes on testnet with a 30 s answer window and explorer links in the transcript. Procedure, expected output and errors: [docs/TESTNET.md](docs/TESTNET.md). Check the configuration without sending anything: `npx tsx scripts/deploy-testnet.ts --dry-run`.
+Under the rule set before the runs, a failed injection check alone means refunds by rule are the default and **the AI panel ships as experimental**, with the result above published.
 
-<!-- FILL after the first `make testnet-demo` that ends in DEMO OK (docs/TESTNET.md step 7): -->
+## 7. Testnet
 
-| Item | Value |
-|---|---|
-| Date, panel mode (live / replay / synthetic) | <!-- FILL --> |
-| Contract | <!-- FILL: v1.certo.testnet + explorer link --> |
-| Token (mock USDC) | <!-- FILL: usdc.certo.testnet + explorer link --> |
-| Sellers | <!-- FILL: chainfacts.sellers.certo.testnet, cheapfacts.sellers.certo.testnet --> |
-| Buyers, resolver | <!-- FILL --> |
-| Deploy transactions | <!-- FILL --> |
-| Scene 1 pay transaction | <!-- FILL --> |
-| Scene 2 resolve transaction (panel for the buyer) | <!-- FILL --> |
-| Scene 3 resolve transaction (panel for the seller) | <!-- FILL --> |
-| Scene 4 resolve_default transaction | <!-- FILL --> |
+Not run yet. `make testnet-demo` deploys the market if needed and runs the same scenes on testnet with a 30 s answer window and explorer links in the transcript. Procedure: [docs/TESTNET.md](docs/TESTNET.md); check the configuration without sending anything: `npx tsx scripts/deploy-testnet.ts --dry-run`.
 
-<!-- FILL: the four scene lines and the DEMO OK line of that run, verbatim. If the panel mode was synthetic, keep: "The juror keys on this testnet contract are the published TEST keys; anyone can sign rulings on it." -->
+<!-- FILL after the first `make testnet-demo` that ends in DEMO OK: date and panel mode; explorer links for the contract, the scene 1 pay transaction, the scene 2 and 3 `resolve` transactions (event `ballots_verified`) and the scene 4 `resolve_default`; then replace "Not run yet" above. -->
 
-## 9. Built at NEAR HACKATHON: window and disclosure
+## 8. Prior art
 
-- Built for NEAR HACKATHON, window 2026-10-19 to 2026-11-14. First commit: <!-- FILL: date and hash of the first commit -->. No code from before the window: <!-- FILL: confirm, or name the pre-existing code and link the diff (HACKATHON.md Q-003) -->.
-- Design document written 2026-11-10: [docs/DESIGN.md](docs/DESIGN.md).
-- AI coding agents: Claude Code (Anthropic) wrote code and documents in this repository. <!-- FILL: other agents used (e.g. Codex), and what the humans wrote -->
-- Team: <!-- FILL: names / handles -->
-- Other projects submitted by the same person (HACKATHON.md Q-015): <!-- FILL: none, or name and link -->
-- Templates or boilerplate: <!-- FILL: none, or name them -->. Libraries used (from npm and crates.io):
+x402r and KAMIYO x402Resolve hold the buyer's payment in escrow and rely on an arbiter or an oracle quorum. Pact Network pays at once but refunds only by rule. Inari (this hackathon) refunds on timeout. Agora (this hackathon) uses three model families in TEEs for software jobs held in escrow, and says it has no chargebacks. `[NV]` = not verified from a primary source.
 
-| Side | Libraries |
-|---|---|
-| Contract (Rust) | `near-sdk` 5.28.3, `near-contract-standards` 5.28.3 (pinned, [CONTRACT_NOTES](docs/CONTRACT_NOTES.md#one-wasm-for-nearcore-2100-and-2140)), `serde_json`; tests: `near-workspaces` 0.22, `tokio`, `ed25519-dalek`, `rand`, `sha2`, `hex`, `base64`, `anyhow`, `futures` |
-| TypeScript | `@near-js/accounts`, `@near-js/crypto`, `@near-js/providers`, `@near-js/signers`, `@near-js/transactions`, `@near-js/types` (2.5), `near-sandbox` 0.3.5, `express` 5, `@modelcontextprotocol/sdk`, `zod`; dev: `typescript`, `tsx`, `vitest`, `@types/node`, `@types/express` |
-| Local chain | nearcore 2.10.0 sandbox binary (downloaded at first run); wasm build: binaryen `wasm-opt` 132.0.0 via `npx` (MVP lowering, `make build` only) |
-| External services | NEAR AI Cloud (`cloud-api.near.ai`): attestation reports (no key); chat completions and signatures (key, not yet used). NEAR testnet RPC `rpc.testnet.fastnear.com` (read-only `view_account` queries so far) |
-
-## 10. Prior art and how this differs
-
-x402r and KAMIYO x402Resolve hold the buyer's payment in escrow and ask both sides to trust an arbiter or an oracle quorum; Inari refunds only on timeout. Here the seller is paid at once against its own bond, and the NEAR contract checks three enclave-signed model votes before the bond pays out. Sources and the search method: DESIGN.md 5.3–5.4 (README and submission-name search of this hackathon's entries, 2026-11-10). `[NV]` marks what was not verified from a primary source.
-
-| | Seller paid | Bad content covered | Who decides | Decision checkable on chain |
+| | Seller paid | Wrong content covered | Who decides | Checkable on chain |
 |---|---|---|---|---|
-| x402r (Base) | After escrow release | Yes | "Independent arbiter" (unnamed) | No `[NV]` |
-| KAMIYO x402Resolve (Solana devnet) | After escrow | Yes, 0–100% scale | Oracle quorum | Oracle signatures `[NV]` |
-| Pact Network (Arbitrum Sepolia) | At once | No: 5xx, timeout, schema only, from a premium pool | Rules | Yes (rules) |
-| Fortytwo x402escrow, Okay3 | After escrow / dispute period | `[NV]` | `[NV]` | `[NV]` |
-| Inari (NEAR, this hackathon) | After worker signature | No: timeout refund only | Rule | Yes |
-| Agora (NEAR, this hackathon) | After three reviewers pass tests | Software jobs with test suites | 3 reviewer agents in TEEs from different model families, then a DAO vote | Its README: "The release is final, so there are no chargebacks" |
-| KAVREN, rubric-near (NEAR, this hackathon) | After acceptance / AI judge | Per job | Hosted evaluator / one AI judge | Partly |
-| **Certo** | **In the paying transaction, up to the bond** | **Yes** | Rules, then 3 models of 3 families | **Yes: the contract rebuilds the prompt and verifies the 3 signatures** |
+| x402r (Base) | After escrow | Yes | Arbiter | No `[NV]` |
+| KAMIYO x402Resolve (Solana) | After escrow | Yes | Oracle quorum | Signatures `[NV]` |
+| Pact Network (Arbitrum Sepolia) | At once | No | Rules | Yes |
+| Inari (NEAR) | After worker signature | No | Rule | Yes |
+| Agora (NEAR) | After review | Software jobs | 3 TEE reviewers, then a DAO | Partly |
+| **Certo** | **In the paying transaction** | **Yes** | Rules, then 3 models of 3 families | **Yes** |
 
-Closest on single components: Agora (three model families in TEEs; escrow, no chargebacks), Demerit (a bond that pays the wronged client and pricing that follows the record; no payment flow, no judge), Covenant (bond slashed automatically, for Intents solvers, rule only). Pact Network is the rule tier of this project as a whole product. An IETF individual draft, `draft-hopley-x402-refund-receipt-02`, defines a refund-receipt format for x402 (seen in search results, not read); the receipt format here is our own (`certo-receipt:v1|…`, DESIGN 4.3). Ten entries of this hackathon verify a NEAR AI Cloud signature or attestation; in their READMEs, none verifies it inside a contract for a money decision `[NV: READMEs searched, not code]`. Entries named Bonded, AgentBond, Taskbond and "Writ: Who Pays When Your AI Agent Gets Fooled" had no README to read `[NV]`. <!-- FILL: result of checking their X posts (DESIGN 7.1 H5), or delete this sentence -->
+Ten entries of this hackathon verify a NEAR AI Cloud signature or attestation; in their READMEs, none verifies it inside a contract for a money decision `[NV: READMEs searched, not code]`. Entries named Writ, TabWrit, PayGuard, AgentPay Guard, PayShield-NEAR, Bonded, AgentBond and Taskbond had no README to read and were not compared. <!-- FILL: one sentence each after reading their X posts, or keep the sentence above --> Method and sources: [docs/DESIGN.md](docs/DESIGN.md) 5.3–5.4. Not built: an adapter to x402's `exact` scheme, refunds in another asset through NEAR Intents, a panel caller inside an enclave.
 
-Not built, described as future work: an adapter to x402's `exact` scheme (FastNEAR's facilitator settles USDC on NEAR with a plain transfer to the payee, while this protocol needs the payment to pass through the contract); refunds in another asset through NEAR Intents (mainnet only); running the panel caller in an enclave (OutLayer) to attest a single ask per dispute.
+## 9. Hackathon disclosure
 
-## 11. Layout, development, licence
+- Window 2026-10-19 to 2026-11-14. Design written 2026-11-10 ([docs/DESIGN.md](docs/DESIGN.md)); first commit 2026-11-11 (`70720fa`). <!-- FILL: confirm "No code from before the window", or name it and link the diff -->
+- AI coding agents: Claude Code (Anthropic) wrote code and documents in this repository. <!-- FILL: other agents; what the humans did -->
+- Team: <!-- FILL -->. Other submissions by the same person: <!-- FILL: none, or name and link -->
+- Libraries: `near-sdk` and `near-contract-standards` 5.28.3, `serde_json`, `near-workspaces`; `@near-js/*` 2.5, `near-sandbox` 0.3.5, `express` 5, `@modelcontextprotocol/sdk`, `zod`, `vitest`, `tsx`. Versions and pins: [docs/CONTRACT_NOTES.md](docs/CONTRACT_NOTES.md). No templates.
+- External services: NEAR AI Cloud (attestation reports, chat completions with signatures); NEAR testnet RPC.
+
+## 10. Layout and commands
 
 ```text
-contracts/certo/   Rust contract (near-sdk 5.28.3): pay, queue, dispute, panel, fees, encode, events; tests/ sandbox.rs, guards.rs
-contracts/mock-usdc/  NEP-141 test token with open mint
-res/                  committed wasm builds, guards/certo_no_g{1..8}.wasm, SHA256SUMS
-packages/core/        canonical encoders (receipt, panel prompt, JSON escaping), chain client, types, golden-vector tests
-packages/seller/      Express middleware protect() and the seller's answer bot
-packages/buyer/       CertoClient SDK and the `certo` CLI
-packages/panel/       panel service (live | replay), resolver
-packages/mcp/         stdio MCP server for the buyer side
-apps/demo/            demo runner (4 scenes; sandbox or testnet), demo sellers, event feed, page in web/
-fixtures/             jurors.json, attestations/, panel/ (ballots), demo/, killtest/, vectors.json
-scripts/              build-contracts.sh, fetch-attestations, probe, killtest, record, verify-recorded, deploy-testnet
-tests/                e2e/sandbox.test.ts, guards/run.ts
-docs/                 DESIGN.md, CONTRACT_NOTES.md, TS_NOTES.md, GUARDS.md, KILLTEST.md, VERIFY.md, TESTNET.md, HACKATHON.md
+contracts/certo/   Rust contract          packages/seller/  Express middleware, answer bot
+packages/core/     encoders, chain client packages/buyer/   SDK and the certo CLI
+packages/panel/    panel service          packages/mcp/     MCP server
+apps/demo/         five scenes, page      tests/            end-to-end, guards
+fixtures/          jurors, attestations, recorded ballots, kill-test cases, golden vectors
+examples/          a seller in 15 lines   llms.txt          the tools for agents
 ```
 
 | Command | Needs | Does |
 |---|---|---|
-| `make demo` | Node ≥ 20 | Local sandbox, both contracts from `res/`, four scenes, page at http://localhost:4020 (`ARGS=--keep-open` keeps it up) |
-| `make test` | Node ≥ 20 | Unit tests of all packages and end-to-end tests on the sandbox |
-| `make guards` | Node ≥ 20 | Attack vs. real and weakened contract, G1–G8 |
-| `make verify` | Node only, no network | Offline check of attestation binding and recorded ballots |
-| `make build` | Rust, `wasm32-unknown-unknown` target, Node (`npx` fetches binaryen 132.0.0) | Rebuilds every wasm in `res/` and `res/SHA256SUMS` (`./scripts/build-contracts.sh`). Each wasm is lowered to the WebAssembly MVP feature set with `wasm-opt` and must validate as MVP, because rustc 1.96's `std` emits sign-extension, bulk-memory and float-to-int instructions that nearcore 2.10.0 rejects; `near-sdk` is pinned to 5.28.3 because later versions import gas-key host functions 2.10.0 lacks ([docs/CONTRACT_NOTES.md](docs/CONTRACT_NOTES.md#one-wasm-for-nearcore-2100-and-2140)) |
-| `make probe` / `make killtest` / `make record` | `NEARAI_API_KEY` | Signature probe / kill test / record demo ballots (exit 2 without a key) |
-| `make testnet-demo` | testnet accounts and keys in `.env` | Deploy if needed, then the four scenes on testnet ([docs/TESTNET.md](docs/TESTNET.md)) |
-| `npx tsc -b` | Node | Type-checks all TypeScript |
+| `make demo` · `make playground` · `make test` · `make guards` · `make verify` | Node | as above |
+| `make probe` · `make killtest` · `make record` | `NEARAI_API_KEY` in `.env` | signature probe · kill test · record the demo's ballots |
+| `make testnet-demo` | testnet accounts in `.env` | deploy if needed, run the scenes on testnet |
+| `make build` · `cargo test --workspace` | Rust | rebuild `res/` · contract tests |
 
-Design and decisions: [docs/DESIGN.md](docs/DESIGN.md) (specification), [docs/CONTRACT_NOTES.md](docs/CONTRACT_NOTES.md) (contract interface), [docs/TS_NOTES.md](docs/TS_NOTES.md) (TypeScript choices), [apps/demo/EVENTS.md](apps/demo/EVENTS.md) (page feed).
-
-Licence: MIT, see [LICENSE](LICENSE).
+Design: [docs/DESIGN.md](docs/DESIGN.md). Contract interface and platform notes: [docs/CONTRACT_NOTES.md](docs/CONTRACT_NOTES.md). Licence: MIT.
