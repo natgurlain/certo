@@ -4,7 +4,7 @@
 
 ## Try it (local sandbox, no keys)
 - `npm ci && make playground` in this repo: keeps a sandbox, two sellers, the panel and a funded buyer running, and writes ~/.certo/playground.env
-- Add the MCP server: `claude mcp add certo -- npx certo-mcp --playground` (run from the repo; Codex: command `npx`, args `["certo-mcp","--playground"]`)
+- Add the MCP server: `claude mcp add certo -- npx certo-mcp --playground` (run from the repo; Codex: command `npx`, args `["certo-mcp","--playground"]`, and `tool_timeout_sec = 120` since certo_dispute may wait up to 90 s)
 - Example endpoints are in CERTO_EXAMPLE_URLS in that file and in the MCP server's instructions
 - Same from a shell: `npx certo --playground quote <url>`, `npx certo --playground call <url>`, `npx certo --playground dispute <call_id>`
 
