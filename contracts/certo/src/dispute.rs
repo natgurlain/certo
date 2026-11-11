@@ -131,8 +131,12 @@ impl Contract {
     }
 
     /// Anyone, after a timeout: (a) seller did not answer/cure → full refund by rule;
-    /// (b) answered but no panel verdict by the deadline → midpoint with a valid reveal,
-    /// else the seller's offer and the buyer's stake goes to the treasury.
+    /// (b) answered but no panel verdict by the deadline → the seller's offer (or the buyer's,
+    /// if lower); the stake is returned with a valid reveal, else it goes to the treasury.
+    /// A missing verdict never pays the buyer more than the seller offered (guard G16): only
+    /// the buyer holds its reveal, and it can always force a verdict itself with `resolve`
+    /// (open to anyone after `resolver_exclusive_ms`), so withholding the reveal from the
+    /// panel must not pay.
     pub fn resolve_default(&mut self, call_id: String, buyer_offer_bps: Option<u16>, salt: Option<String>) {
         let c = self.call(&call_id);
         let d = c.dispute.clone().unwrap_or_else(|| fail("E_STATUS"));
@@ -154,7 +158,10 @@ impl Contract {
                 };
                 let (bps, reason) = match revealed {
                     Some(b) if seller_bps >= b => (b, "settled"),
+                    #[cfg(feature = "no_g16")]
                     Some(b) => (fees::midpoint_bps(b, seller_bps), "midpoint"),
+                    #[cfg(not(feature = "no_g16"))]
+                    Some(_) => (seller_bps, "seller_offer"),
                     None => (seller_bps, "no_reveal"),
                 };
                 let refund = c.price * bps as u128 / 10_000;

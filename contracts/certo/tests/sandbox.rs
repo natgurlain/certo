@@ -373,7 +373,7 @@ async fn t08_panel_seller_partial_offer_wins() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn t08_panel_deadline_default_midpoint_or_seller_offer() -> anyhow::Result<()> {
+async fn t08_panel_deadline_default_pays_seller_offer() -> anyhow::Result<()> {
     let e = setup(REAL).await?;
     let (a, salt_a) = e.answered_dispute(WRONG_BODY, 10_000, 2_000).await?;
     let (b, _) = e.answered_dispute(WRONG_BODY, 10_000, 2_000).await?;
@@ -387,17 +387,18 @@ async fn t08_panel_deadline_default_midpoint_or_seller_offer() -> anyhow::Result
     e.advance_past(answered + 300_000).await?;
     let bb = e.balance(&e.buyer).await?;
     let t0 = treasury(&e).await?;
-    // valid reveal: midpoint of 100% and 20% = 60%, stake back
+    // valid reveal of 100% against the seller's 20%: the seller's offer, stake back (never the midpoint, G16)
     assert_err(&rd(&a, json!({"buyer_offer_bps": 9_000, "salt": hex(&salt_a)})).await?, "E_COMMIT_MISMATCH");
     let r = rd(&a, json!({"buyer_offer_bps": 10_000, "salt": hex(&salt_a)})).await?;
     ok(&r);
-    assert_eq!(events(&r, "dispute_resolved")[0]["reason"], "midpoint");
-    assert_eq!(e.balance(&e.buyer).await? - bb, 240_000 + 20_000);
+    let ev = &events(&r, "dispute_resolved")[0];
+    assert_eq!((ev["reason"].as_str(), ev["refund_bps"].as_u64()), (Some("seller_offer"), Some(2_000)));
+    assert_eq!(e.balance(&e.buyer).await? - bb, 80_000 + 20_000);
     // no reveal: seller's offer, stake to treasury
     let r = rd(&b, json!({})).await?;
     ok(&r);
     assert_eq!(events(&r, "dispute_resolved")[0]["reason"], "no_reveal");
-    assert_eq!(e.balance(&e.buyer).await? - bb, 260_000 + 80_000);
+    assert_eq!(e.balance(&e.buyer).await? - bb, 100_000 + 80_000);
     assert_eq!(treasury(&e).await? - t0, 20_000);
     Ok(())
 }

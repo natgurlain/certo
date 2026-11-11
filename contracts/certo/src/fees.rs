@@ -79,7 +79,8 @@ pub fn settle_panel(price: u128, stake: u128, base_stake: u128, offer_bps: u16, 
     }
 }
 
-/// Midpoint of two offers, rounded down to a whole percent.
+/// Midpoint of two offers, rounded down to a whole percent. Only the weakened `no_g16`
+/// build uses it (the old panel-timeout default, DESIGN 4.8 G16).
 pub fn midpoint_bps(a: u16, b: u16) -> u16 {
     ((a as u32 + b as u32) / 2 / 100 * 100) as u16
 }

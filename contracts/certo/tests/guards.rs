@@ -1,5 +1,5 @@
-//! Guard tests G1–G15 (DESIGN 4.8) on the sandbox. For each guard with a
-//! weakened build (`res/guards/certo_no_gN.wasm`, N = 1..8), the same attack
+//! Guard tests G1–G16 (DESIGN 4.8) on the sandbox. For each guard with a
+//! weakened build (`res/guards/certo_no_gN.wasm`, N = 1..8 and 16), the same attack
 //! is run against the real wasm (must be rejected with the named error) and
 //! against the weakened wasm (must succeed).
 mod common;
@@ -21,9 +21,10 @@ fn verdict(r: &near_workspaces::result::ExecutionFinalResult, code: &str) -> Res
 
 async fn pair(name: &str, n: u8, attack: impl Fn(String) -> futures::future::BoxFuture<'static, Attack>, code: &str) {
     let real = attack(REAL.to_string()).await.unwrap();
-    let weak = attack(guard(n)).await.unwrap();
-    println!("{name}: real -> {real:?}; no_g{n} -> {weak:?}");
+    println!("{name}: real -> {real:?}");
     assert_eq!(real, Err(code.to_string()), "{name}: real contract must reject");
+    let weak = attack(guard(n)).await.unwrap();
+    println!("{name}: no_g{n} -> {weak:?}");
     assert!(weak.is_ok(), "{name}: attack must succeed when guard {n} is removed");
 }
 
@@ -199,6 +200,42 @@ fn g8(wasm: String) -> futures::future::BoxFuture<'static, Attack> {
 #[tokio::test]
 async fn g8_prompt_binding() {
     pair("G8", 8, g8, "E_BALLOT_SIG").await;
+}
+
+// G16 panel timeout: the buyer disputes an honest call at 100 %, the seller answers 0 %,
+// and the buyer never gives the panel its reveal. After the panel deadline it calls
+// `resolve_default` with the reveal. The real contract pays the seller's offer (0 %) and
+// returns the stake; the weakened build pays the midpoint (50 %) for free.
+fn g16(wasm: String) -> futures::future::BoxFuture<'static, Attack> {
+    Box::pin(async move {
+        let e = setup(&wasm).await?;
+        let (id, salt) = e.answered_dispute(GOOD_BODY, 10_000, 0).await?;
+        let answered = n(&e.call_view(&id).await?["dispute"]["answered_at_ms"]) as u64;
+        e.advance_past(answered + 300_000).await?;
+        let (bb, sb) = (e.balance(&e.buyer).await?, n(&e.seller_view().await?["bond"]));
+        let r = e
+            .buyer
+            .call(e.mg.id(), "resolve_default")
+            .args_json(json!({"call_id": id, "buyer_offer_bps": 10_000, "salt": hex(&salt)}))
+            .gas(TX_GAS)
+            .transact()
+            .await?;
+        ok(&r);
+        let ev = &events(&r, "dispute_resolved")[0];
+        let taken = sb - n(&e.seller_view().await?["bond"]);
+        assert_eq!(e.balance(&e.buyer).await? - bb, taken + 20_000, "stake returned with a valid reveal");
+        if taken == 0 {
+            assert_eq!(ev["reason"], "seller_offer");
+            Ok(Err("seller_offer".into()))
+        } else {
+            Ok(Ok(format!("buyer took {taken} of the 400000 price with no verdict ({})", ev["reason"])))
+        }
+    })
+}
+
+#[tokio::test]
+async fn g16_panel_timeout_pays_seller_offer() {
+    pair("G16", 16, g16, "seller_offer").await;
 }
 
 // G9 history never raises exposure: 600 clean calls, then the limit is still 1x bond.
