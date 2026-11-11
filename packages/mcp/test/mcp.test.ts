@@ -22,6 +22,7 @@ chain.addSeller(SELLER, toHex(key.publicKey));
 chain.addTermsFor(SELLER, 'holders-v1', 'terms');
 const app = express();
 app.get('/v1/holders', protect({ contract: chain, seller: SELLER, termsId: 'holders-v1', price: '400000', receiptKey: key }), (_q, r) => void r.json({ token: 'NEO' }));
+app.get('/free', (_q, r) => void r.status(404).json({ error: 'not sold here' }));
 // a replay panel without a recording of the case
 app.post('/cases', (_q, r) => void r.status(424).json({ error: 'no recording for this case (sha256 ab); set NEARAI_API_KEY to ask the live panel' }));
 let base = '';
@@ -89,6 +90,8 @@ describe('MCP server', () => {
   });
 
   it('reports refusals as tool errors with what to do', async () => {
+    const plain = parse(await client.callTool({ name: TOOL_QUOTE, arguments: { url: `${base}/free` } }));
+    expect(plain).toMatchObject({ error: 'NOT_PROTECTED', message: 'expected 402, got 404: {"error":"not sold here"}' });
     const r = await client.callTool({ name: TOOL_CALL, arguments: { url: `${base}/v1/holders?token=NEAR`, max_price: '0.39' } });
     expect(r.isError).toBe(true);
     expect(parse(r)).toMatchObject({ error: 'PRICE_TOO_HIGH', what_to_do: expect.stringMatching(/nothing was paid/) });

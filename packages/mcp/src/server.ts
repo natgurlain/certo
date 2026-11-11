@@ -26,10 +26,10 @@ function errorResult(e: unknown) {
   const code = e instanceof CertoError ? e.code : undefined;
   const contractCode = (e as { contractCode?: string }).contractCode ?? (e as { code?: string }).code;
   const raw = (e as Error).message;
-  // a contract rejection carries the RPC's raw JSON; the code says it in one word
-  const message = contractCode ? raw.replace(/\{.*\}/s, contractCode) : raw;
+  // a contract rejection carries the RPC's raw JSON; its E_ code says it in one word (other messages may quote JSON on purpose)
+  const message = contractCode?.startsWith('E_') ? raw.replace(/\{.*\}/s, contractCode) : raw;
   return text({
-    error: code ?? contractCode ?? message, message, call_id: (e as CertoError).callId, contract_code: contractCode,
+    error: code ?? (contractCode?.startsWith('E_') ? contractCode : message), message, call_id: (e as CertoError).callId, contract_code: contractCode,
     what_to_do: helpFor(code, contractCode),
   }, true);
 }
