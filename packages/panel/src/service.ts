@@ -112,8 +112,8 @@ export class PanelService {
       request_sha256s: recs.map((r) => sha256Hex(r.request_body)),
       response_sha256s: recs.map((r) => sha256Hex(recordingResponseBody(r))),
     };
-    if (!out.winner) return { ...out, reason: 'no majority (E_NO_MAJORITY); resolve not submitted' };
-    return this.submit(c, recs.map(toContractBallot), out);
+    // no majority: a split (G17) settles at once at the seller's offer and is counted on both records
+    return this.submit(c, recs.map(toContractBallot), out.winner ? out : { ...out, reason: "split panel: the seller's offer is paid, stake back" });
   }
 
   private async submit(c: CaseRequest, ballots: ContractBallot[], out: CaseOutcome): Promise<CaseOutcome> {

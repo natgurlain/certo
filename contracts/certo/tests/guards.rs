@@ -439,22 +439,41 @@ async fn g14_resolver_slot() -> anyhow::Result<()> {
     Ok(())
 }
 
-// G15 majority: two abstentions and one vote.
+// G15 majority: two abstentions and one buyer vote never decide for the buyer. Three verified
+// ballots without a majority are a split (G17): the seller's offer, stake back, counted on both
+// records, and the dispute is closed.
 #[tokio::test]
 async fn g15_majority() -> anyhow::Result<()> {
     let e = setup(REAL).await?;
-    let (id, salt) = e.answered_dispute(WRONG_BODY, 10_000, 0).await?;
-    let b = e.ballots(WRONG_BODY, 10_000, 0, [None, Some(true), None]).await?;
-    let r = e.resolve(&e.resolver, &id, 10_000, salt, WRONG_BODY, b).await?;
-    assert_err(&r, "E_NO_MAJORITY");
-    assert_eq!(e.call_view(&id).await?["status"], "Answered", "dispute still open");
-    // one each plus an abstention is no majority either
-    let b = e.ballots(WRONG_BODY, 10_000, 0, [Some(true), Some(false), None]).await?;
-    assert_err(&e.resolve(&e.resolver, &id, 10_000, salt, WRONG_BODY, b).await?, "E_NO_MAJORITY");
-    // retried with fresh ballots: two equal votes decide
-    let b = e.ballots(WRONG_BODY, 10_000, 0, [Some(true), None, Some(true)]).await?;
+    let (id, salt) = e.answered_dispute(WRONG_BODY, 10_000, 2_000).await?;
+    let (id2, salt2) = e.answered_dispute(WRONG_BODY, 10_000, 0).await?;
+    let bb = e.balance(&e.buyer).await?;
+    let b = e.ballots(WRONG_BODY, 10_000, 2_000, [None, Some(true), None]).await?;
     let r = e.resolve(&e.resolver, &id, 10_000, salt, WRONG_BODY, b).await?;
     ok(&r);
+    let ev = &events(&r, "dispute_resolved")[0];
+    assert_eq!((ev["tier"].as_str(), ev["refund_bps"].as_u64(), n(&ev["refund"])), (Some("split"), Some(2_000), 80_000));
+    assert!(ev.get("winner").is_none());
+    assert_eq!(e.balance(&e.buyer).await? - bb, 80_000 + 20_000, "seller's 20 % offer and the stake");
+    assert!(e.call_view(&id).await?.is_null(), "split is final");
+    // one vote each plus an abstention is a split too
+    let b = e.ballots(WRONG_BODY, 10_000, 0, [Some(true), Some(false), None]).await?;
+    let r = e.resolve(&e.resolver, &id2, 10_000, salt2, WRONG_BODY, b).await?;
+    ok(&r);
+    assert_eq!(events(&r, "dispute_resolved")[0]["tier"], "split");
+    let (s, br) = (e.seller_view().await?, e.view("get_buyer", json!({"id": e.buyer.id()})).await?);
+    assert_eq!((s["splits"].as_u64(), br["splits"].as_u64(), s["lifetime_losses"].as_u64()), (Some(2), Some(2), Some(0)));
+    // two equal votes still decide
+    let (id3, salt3) = e.answered_dispute(WRONG_BODY, 10_000, 0).await?;
+    let b = e.ballots(WRONG_BODY, 10_000, 0, [Some(true), None, Some(true)]).await?;
+    let r = e.resolve(&e.resolver, &id3, 10_000, salt3, WRONG_BODY, b).await?;
+    ok(&r);
     assert_eq!(events(&r, "dispute_resolved")[0]["winner"], "buyer");
+    // a split cannot be faked to close a dispute: every ballot must verify
+    let (id4, salt4) = e.answered_dispute(WRONG_BODY, 10_000, 0).await?;
+    let mut b = e.ballots(WRONG_BODY, 10_000, 0, [None, None, Some(false)]).await?;
+    b[0]["response_body"] = json!(Env::chat("garbled"));
+    assert_err(&e.resolve(&e.resolver, &id4, 10_000, salt4, WRONG_BODY, b).await?, "E_BALLOT_SIG");
+    assert_eq!(e.call_view(&id4).await?["status"], "Answered");
     Ok(())
 }

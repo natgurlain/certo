@@ -88,6 +88,8 @@ pub struct Seller {
     pub lifetime_volume: u128,
     pub q_head: u64,
     pub q_tail: u64,
+    /// Content disputes that ended in a split panel (G17). Information only.
+    pub splits: u32,
 }
 
 impl Seller {
@@ -107,6 +109,7 @@ impl Seller {
             lifetime_volume: 0,
             q_head: 0,
             q_tail: 0,
+            splits: 0,
         }
     }
     /// `bond − reserved − disputed_reserved` (saturating so weakened guard builds stay viewable).
@@ -176,6 +179,8 @@ pub struct BuyerRec {
     pub disputes_won: u32,
     pub disputes_lost: u32,
     pub stake_mult_log2: u8,
+    /// Content disputes that ended in a split panel (G17). Information only.
+    pub splits: u32,
 }
 
 #[near(contract_state)]
@@ -303,7 +308,7 @@ impl Contract {
         let b = self.buyers.get(&id).cloned().unwrap_or_default();
         json!({
             "disputes_won": b.disputes_won, "disputes_lost": b.disputes_lost,
-            "stake_mult_log2": b.stake_mult_log2, "stake_multiplier": 1u32 << b.stake_mult_log2,
+            "stake_mult_log2": b.stake_mult_log2, "stake_multiplier": 1u32 << b.stake_mult_log2, "splits": b.splits,
         })
     }
 

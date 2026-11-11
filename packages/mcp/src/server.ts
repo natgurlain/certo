@@ -77,7 +77,8 @@ type SellerRecord = Pick<SellerView, 'bond' | 'free_capacity' | 'fee_bps' | 'lif
 function sellerJson(s: SellerRecord & { window_ms?: number }) {
   return {
     bond_usdc: usdc(s.bond), free_capacity_usdc: usdc(s.free_capacity), fee_pct: s.fee_bps / 100,
-    released_calls: s.lifetime_calls, lost_disputes: s.lifetime_losses, volume_usdc: usdc(s.lifetime_volume),
+    released_calls: s.lifetime_calls, lost_disputes: s.lifetime_losses, split_disputes: (s as { splits?: number }).splits ?? 0,
+    volume_usdc: usdc(s.lifetime_volume),
     ...(s.window_ms ? { refund_window_s: s.window_ms / 1000 } : {}),
   };
 }
@@ -100,7 +101,7 @@ export function createMcpServer(o: McpOptions): McpServer {
 
   server.registerTool(TOOL_QUOTE, {
     description: `Look at a ${PRODUCT_NAME}-bonded endpoint without paying: price, the seller's bond and free capacity (what can be refunded `
-      + 'right now), fee, record (released calls, lost disputes), refund window, the published terms a dispute is judged against, '
+      + 'right now), fee, record (released calls, lost disputes, split panels), refund window, the published terms a dispute is judged against, '
       + 'whether content disputes go to the experimental AI panel ("panel") or are refunded by rule only, '
       + `and the stake a dispute would cost you. "payable": false lists why certo_call would refuse. ${AMOUNTS} `
       + `Errors: NOT_PROTECTED (not a Certo endpoint), NO_SCHEME, WRONG_CONTRACT (another contract than configured).${examples}`,
@@ -155,7 +156,8 @@ export function createMcpServer(o: McpOptions): McpServer {
       + 'answers with its own offer, then an experimental panel of three AI jurors (NEAR AI TEE models, votes checked by the contract; '
       + 'only when the seller\'s terms enable it, see "panel" in certo_quote) picks the closer offer. '
       + "Lost: your stake is forfeited, you get only the seller's offer, and your next stake doubles. Won: your offer is refunded and the "
-      + 'stake comes back. "error": the seller signed an HTTP status >= 500: full refund by rule, no stake, one transaction. '
+      + 'stake comes back. Split (no majority): only the seller\'s offer, stake back, and the split is counted on both records '
+      + '(seller_record.split_disputes). "error": the seller signed an HTTP status >= 500: full refund by rule, no stake, one transaction. '
       + '"rule": the body breaks a published rule of the terms (not JSON, missing required field, stale): full refund by rule, no stake. '
       + '"non_delivery": paid but no valid response (TIMEOUT, NO_RECEIPT, ...); the seller may cure by publishing the signed response '
       + '(you get your stake back, no refund), otherwise a full refund once its answer deadline passes. '

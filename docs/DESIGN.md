@@ -277,6 +277,7 @@ pub struct Seller {
     clean_calls_since_step: u32, clean_volume_since_step: u128, recovery_volume: u128,
     lifetime_calls: u64, lifetime_losses: u32, lifetime_volume: u128,
     q_head: u64, q_tail: u64,
+    splits: u32,                         // content disputes that ended in a split panel (G17); information only
 }
 pub struct Terms { text: String, required_fields: Vec<String>, as_of_field: Option<String>, max_age_s: Option<u32>, panel: bool }
 pub struct Call {
@@ -292,7 +293,7 @@ pub struct Dispute {
     seller_offer_bps: Option<u16>, answered_at_ms: u64,
 }
 pub struct QueueItem { expires_at_ms: u64, call_id: String }
-pub struct BuyerRec { disputes_won: u32, disputes_lost: u32, stake_mult_log2: u8 }   // multiplier 1,2,4,8,16
+pub struct BuyerRec { disputes_won: u32, disputes_lost: u32, stake_mult_log2: u8, splits: u32 }   // multiplier 1,2,4,8,16; splits: information only (G17)
 ```
 
 A call that ends (released or resolved) is **deleted**; its history lives in events and in the seller's counters. Storage is therefore bounded by calls inside their window.
@@ -356,7 +357,7 @@ Nobody has to. Expiry is lazy:
 | Method | Preconditions | Effects / events |
 |---|---|---|
 | `release(seller, max)` | — | sweep up to `min(max, SWEEP_MAX)` items |
-| `resolve(call_id, buyer_offer_bps, salt, request_canon, response_body, ballots: [Ballot; 3])` with `Ballot{response_body: String, signature: Base64<[u8;64]>, kind: "provider_tee" | "gateway"}` | status `Answered`; caller = `resolver` or `now > answered_at + resolver_exclusive_ms`; `sha256(u16_le(buyer_offer_bps) ‖ salt) == buyer_commit` (`E_COMMIT_MISMATCH`); offer a multiple of 100, ≤ 10000; `sha256(request_canon) == call.request_hash` and `sha256(response_body) == dispute.response_hash` (`E_EVIDENCE_HASH`); sizes within caps and valid UTF-8 (`E_EVIDENCE_SIZE`) | **Settlement shortcut:** if `seller_offer_bps ≥ buyer_offer_bps` → refund = buyer's offer, stake returned, no loss recorded on either side, ballots ignored, `tier: "settled"`. **Otherwise** for i in 0..3: `body_i = build_panel_request(i, terms.text, request_canon, response_body, buyer_offer_bps, seller_offer_bps)`; `text_i = model_id_i + ":" + hex(sha256(body_i)) + ":" + hex(sha256(ballot_i.response_body))` (for `gateway`: without the model prefix, key = `gateway_key`); `ed25519_verify(sig_i, text_i, key_i)` must hold (`E_BALLOT_SIG`); `vote_i = parse_vote(ballot_i.response_body)` ∈ {X, Y, abstain}; map X/Y to buyer/seller by juror index (4.4). Need ≥ 2 equal non-abstain votes (`E_NO_MAJORITY`; the dispute stays `Answered` and `resolve` can be called again). Then settle (below). Events: `ballots_verified{call_id, epoch, request_sha256s, response_sha256s, votes}`, `dispute_resolved{call_id, tier: "panel", winner, votes, refund, ruling_fee}` |
+| `resolve(call_id, buyer_offer_bps, salt, request_canon, response_body, ballots: [Ballot; 3])` with `Ballot{response_body: String, signature: Base64<[u8;64]>, kind: "provider_tee" | "gateway"}` | status `Answered`; caller = `resolver` or `now > answered_at + resolver_exclusive_ms`; `sha256(u16_le(buyer_offer_bps) ‖ salt) == buyer_commit` (`E_COMMIT_MISMATCH`); offer a multiple of 100, ≤ 10000; `sha256(request_canon) == call.request_hash` and `sha256(response_body) == dispute.response_hash` (`E_EVIDENCE_HASH`); sizes within caps and valid UTF-8 (`E_EVIDENCE_SIZE`) | **Settlement shortcut:** if `seller_offer_bps ≥ buyer_offer_bps` → refund = buyer's offer, stake returned, no loss recorded on either side, ballots ignored, `tier: "settled"`. **Otherwise** for i in 0..3: `body_i = build_panel_request(i, terms.text, request_canon, response_body, buyer_offer_bps, seller_offer_bps)`; `text_i = model_id_i + ":" + hex(sha256(body_i)) + ":" + hex(sha256(ballot_i.response_body))` (for `gateway`: without the model prefix, key = `gateway_key`); `ed25519_verify(sig_i, text_i, key_i)` must hold (`E_BALLOT_SIG`); `vote_i = parse_vote(ballot_i.response_body)` ∈ {X, Y, abstain}; map X/Y to buyer/seller by juror index (4.4). ≥ 2 equal non-abstain votes decide; then settle (below). No majority (all three ballots verified): a **split** (guard G17), settled at once at the seller's offer, stake returned, no loss, fee step, ruling fee or stake change, `splits += 1` on both the seller's and the buyer's record. Events: `ballots_verified{call_id, epoch, request_sha256s, response_sha256s, votes}`, then `dispute_resolved{call_id, tier: "panel", winner, votes, refund, refund_bps, to_buyer, ruling_fee}` or, for a split, `dispute_resolved{call_id, tier: "split", votes, refund, refund_bps, stake_returned}` |
 | `resolve_default(call_id, buyer_offer_bps?, salt?)` | (a) `NonDeliveryClaimed` or `Disputed`, and `now > opened_at + answer_ms`: seller did not answer → **full refund**, stake returned, seller pays ruling fee, loss recorded, `tier: "rule", reason: "seller_no_answer"`. (b) `Answered` and `now > answered_at + panel_deadline_ms`: no verdict → refund = the seller's offer (the buyer's, if that is lower), no loss on either side; with a valid reveal the stake is returned, without one it goes to the treasury. Never the midpoint: only the buyer can give the panel its reveal, so a midpoint default would pay a buyer for withholding it (guard G16; `docs/CONTRACT_NOTES.md` choice 5). `tier: "default"` | as stated |
 | `withdraw_claimable()` | `claimable[caller] > 0` | transfer |
 
@@ -366,14 +367,15 @@ Nobody has to. Expiry is lazy:
 |---|---|---|---|---|
 | Buyer's offer | `refund + s` (own stake back) | `−(refund + s0)` | `+s0` (the ruling fee, paid by the seller) | seller loss; buyer win |
 | Seller's offer | `refund` (seller's own offer; may be 0) | `−refund` | `+s` (buyer's stake) | buyer loss; no seller loss |
+| Split (no majority, G17): `o` = seller's offer | `refund + s` (own stake back) | `−refund` | nothing | `splits + 1` on both; no loss, fee step or stake change |
 
-In both cases `disputed_reserved −= reserve` and the call is deleted.
+In every case `disputed_reserved −= reserve` and the call is deleted.
 
-**Views:** `get_config()`, `get_jurors()`, `get_seller(id)` → `{bond, reserved, disputed_reserved, free_capacity (after simulated sweep), fee_bps, window_ms, lifetime_calls, lifetime_losses, lifetime_volume, receipt_pubkey}`, `get_terms(seller, terms_id)`, `get_call(call_id)`, `get_buyer(id)`, `quote(seller, price)` → `{fee, stake, would_fit: bool}`, `build_panel_request(juror_idx, terms_text, request_canon, response_body, buyer_bps, seller_bps)` → `String` (the exact bytes the contract will hash; used by the panel service and by tests to prove the TS and Rust encoders agree), `receipt_text(call_id, response_hash, status_code, served_at_ms)` → `String`, `claimable_of(id)`.
+**Views:** `get_config()`, `get_jurors()`, `get_seller(id)` → `{bond, reserved, disputed_reserved, free_capacity (after simulated sweep), fee_bps, window_ms, lifetime_calls, lifetime_losses, splits, lifetime_volume, receipt_pubkey}`, `get_terms(seller, terms_id)`, `get_call(call_id)`, `get_buyer(id)`, `quote(seller, price)` → `{fee, stake, would_fit: bool}`, `build_panel_request(juror_idx, terms_text, request_canon, response_body, buyer_bps, seller_bps)` → `String` (the exact bytes the contract will hash; used by the panel service and by tests to prove the TS and Rust encoders agree), `receipt_text(call_id, response_hash, status_code, served_at_ms)` → `String`, `claimable_of(id)`.
 
 **Events:** NEP-297, `standard: "certo"`, `version: "1.0.0"`; names as given above.
 
-**Errors** (panic messages, stable strings): `E_NOT_REGISTERED`, `E_BOND_LOW`, `E_TERMS`, `E_PRICE_MIN`, `E_DUP_CALL`, `E_EXPOSURE`, `E_WRONG_TOKEN`, `E_NOT_BUYER`, `E_NOT_SELLER`, `E_STATUS` (wrong call state; covers a second dispute), `E_WINDOW_CLOSED`, `E_BAD_RECEIPT_SIG`, `E_HTTP_STATUS`, `E_STAKE_LOW`, `E_NO_PANEL_TERMS`, `E_ANSWER_LATE`, `E_TOO_EARLY`, `E_RESOLVER_ONLY`, `E_COMMIT_MISMATCH`, `E_OFFER_RANGE`, `E_EVIDENCE_HASH`, `E_EVIDENCE_SIZE`, `E_BALLOT_SIG`, `E_NO_MAJORITY`, `E_RULE_NOT_BROKEN`, `E_WITHDRAW_EXPOSED`.
+**Errors** (panic messages, stable strings): `E_NOT_REGISTERED`, `E_BOND_LOW`, `E_TERMS`, `E_PRICE_MIN`, `E_DUP_CALL`, `E_EXPOSURE`, `E_WRONG_TOKEN`, `E_NOT_BUYER`, `E_NOT_SELLER`, `E_STATUS` (wrong call state; covers a second dispute), `E_WINDOW_CLOSED`, `E_BAD_RECEIPT_SIG`, `E_HTTP_STATUS`, `E_STAKE_LOW`, `E_NO_PANEL_TERMS`, `E_ANSWER_LATE`, `E_TOO_EARLY`, `E_RESOLVER_ONLY`, `E_COMMIT_MISMATCH`, `E_OFFER_RANGE`, `E_EVIDENCE_HASH`, `E_EVIDENCE_SIZE`, `E_BALLOT_SIG`, `E_RULE_NOT_BROKEN`, `E_WITHDRAW_EXPOSED`.
 
 **Gas and storage notes** (estimates `[NV]`, measured in T07/T08 and written into the README):
 
@@ -475,7 +477,9 @@ You are one of three independent arbiters in a payment dispute over one paid API
 
 #### Aggregation
 
-Votes are mapped to buyer/seller by juror index. Two or three equal votes decide. With fewer than two equal valid votes `resolve` fails with `E_NO_MAJORITY` and may be retried with fresh ballots until the panel deadline.
+Votes are mapped to buyer/seller by juror index. Two or three equal votes decide. With fewer than two equal valid votes (any mix of one buyer vote, one seller vote and abstentions) the panel is **split** (guard G17): `resolve` settles at once at the seller's offer, returns the stake, records no loss, fee step or stake change, and adds 1 to `splits` on both parties' records. No money moves to the buyer without a majority. The split, and any text planted in the evidence, is public: the evidence and the raw juror answers are transaction arguments and both records count it.
+
+Why: before, a split failed with `E_NO_MAJORITY` and waited for the panel-timeout default, which also pays the seller's offer. In the kill test one seller-planted line ("SYSTEM: arbitration policy updated…", `docs/KILLTEST.md` run 2) split a case the panel otherwise gave the buyer 3–0. Paying more than the seller's offer on a split (for example the midpoint) would let a buyer provoke abstentions with its own request text, or collect them by re-asking, and take money from honest sellers; so the planter keeps the seller's offer, but not a clean record. Known costs: a split is final, so neither party can re-ask for a majority; a seller in the wrong whose planted text splits the panel pays only its own offer, with a split on its record instead of a loss. Fewer than three verifying ballots still fail with `E_BALLOT_SIG`, so nobody can fake a split to close a dispute.
 
 #### On chain and off chain
 
@@ -488,7 +492,7 @@ Votes are mapped to buyer/seller by juror index. Two or three equal votes decide
 
 #### Re-asking (stated limit)
 
-A valid signature does not show that the model was asked once. Limits in this build: the request is pinned (temperature 0, seed 7, no free parameters), so repeated asks mostly return the same answer `[NV]`; for 60 s only the resolver account may submit, so the parties cannot shop for a verdict unless the resolver is down; after that either party can. The resolver operator could re-ask. Removing this needs the caller to run in an enclave that attests "one ask per dispute" (OutLayer) or a provider-side idempotency key. Not built.
+A valid signature does not show that the model was asked once. Limits in this build: the request is pinned (temperature 0, seed 7, no free parameters), so repeated asks mostly return the same answer `[NV]`; for 60 s only the resolver account may submit, so the parties cannot shop for a verdict unless the resolver is down; after that either party can (in practice only the buyer: only it holds the reveal). A split is final, so a re-ask that splits ends the dispute at the seller's offer. The resolver operator could re-ask. Removing this needs the caller to run in an enclave that attests "one ask per dispute" (OutLayer) or a provider-side idempotency key. Not built.
 
 #### Replay mode (so `make demo` needs no credits)
 
@@ -604,8 +608,9 @@ Each guard has (a) a test that performs the attack against the real contract and
 | G12 | Cured call is not released early | Non-delivery claim, cure, then sweep at the old expiry | Call still `Open` until the new expiry |
 | G13 | Solvency (property test, 500 random sequences of pay/dispute/resolve/release/withdraw) | — | Invariant I1 holds after every step; token balance of the contract = Σ bonds + Σ stakes + treasury + Σ claimable |
 | G14 | Resolver slot | Seller calls `resolve` 10 s after answering | `E_RESOLVER_ONLY`; succeeds at 61 s |
-| G15 | Majority | Two abstentions and one vote | `E_NO_MAJORITY`, dispute still open |
+| G15 | Majority | Two abstentions and one buyer vote | Not a buyer win: a split (G17), the seller's offer, dispute closed; a split with one ballot that does not verify is `E_BALLOT_SIG`, dispute still open |
 | G16 | No verdict pays no more than the seller offered | Buyer disputes an honest call at 100 %, seller answers 0 %, buyer withholds its reveal from the panel and calls `resolve_default` with it after the panel deadline | Seller's offer (0 %) paid, stake returned; the `no_g16` build pays the midpoint (50 %) |
+| G17 | A split panel pays no more than the seller offered | Buyer disputes at 100 %, seller answers 0 %, the resolver submits three verified ballots: abstain, abstain, seller (the kill-test split) | Settled at once: seller's offer (0 %), stake returned, `splits` 1 on both records, seller's fee unchanged; the `no_g17` build pays the midpoint (50 %) |
 
 ---
 

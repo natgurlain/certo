@@ -17,7 +17,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 T=wasm32-unknown-unknown
-GUARDS="1 2 3 4 5 6 7 8 16"
+GUARDS="1 2 3 4 5 6 7 8 16 17"
 CARGO_HOME_DIR="${CARGO_HOME:-$HOME/.cargo}"
 export RUSTFLAGS="--cfg near -C link-arg=-s --remap-path-prefix=$CARGO_HOME_DIR=/cargo --remap-path-prefix=$ROOT=/src ${RUSTFLAGS:-}"
 

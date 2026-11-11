@@ -565,6 +565,9 @@ export function outcomeOf(
 /** One sentence for an outcome. */
 export function describeOutcome(o: Outcome): string {
   const money = `refund ${formatUsdc(o.refund)} USDC, stake back ${formatUsdc(o.stakeBack)}, stake lost ${formatUsdc(o.stakeLost)}`;
-  const how = o.tier === 'panel' ? `panel verdict for the ${o.winner} (${(o.votes ?? []).join('/')})` : `${o.tier}${o.reason ? ` (${o.reason})` : ''}`;
+  const votes = (o.votes ?? []).join('/');
+  const how = o.tier === 'panel' ? `panel verdict for the ${o.winner} (${votes})`
+    : o.tier === 'split' ? `split panel (${votes}): no majority, so the seller's offer; counted on both records`
+    : `${o.tier}${o.reason ? ` (${o.reason})` : ''}`;
   return o.result === 'cured' || o.result === 'settled_elsewhere' ? o.reason ?? o.result : `${o.result}: ${money}; ${how}`;
 }

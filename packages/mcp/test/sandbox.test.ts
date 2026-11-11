@@ -80,7 +80,7 @@ describe('sandbox e2e through certo-mcp --playground', () => {
     expect(c.getInstructions()).toContain(`cheapfacts = ${url}`);
     const q = parse(await c.callTool({ name: 'certo_quote', arguments: { url } }));
     expect(q).toMatchObject({ seller: 'cheapfacts', price_usdc: '0.400000', payable: true, dispute_stake_usdc: '0.020000',
-      seller_record: { bond_usdc: '50.000000', free_capacity_usdc: '50.000000', fee_pct: 1, lost_disputes: 0 }, terms: { text: fx.terms.text } });
+      seller_record: { bond_usdc: '50.000000', free_capacity_usdc: '50.000000', fee_pct: 1, lost_disputes: 0, split_disputes: 0 }, terms: { text: fx.terms.text } });
     const call = parse(await c.callTool({ name: 'certo_call', arguments: { url } }));
     expect(call).toMatchObject({ http_status: 200, price_usdc: '0.400000', receipt_verified: true, suggested: { action: 'dispute' } });
     expect(call.body).toBe(fx.responses.cheapfacts);

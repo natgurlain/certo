@@ -103,7 +103,7 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
           url: q.url, seller: q.seller, price_usdc: formatUsdc(q.price), max_price_usdc: formatUsdc(q.maxPrice), payable: q.problems.length === 0,
           problems: q.problems, fee_bps: q.feeBps, refund_window_s: q.windowMs / 1000, dispute_stake_usdc: formatUsdc(q.disputeStake),
           bond_usdc: s && formatUsdc(s.bond), free_capacity_usdc: s && formatUsdc(s.free_capacity),
-          record: s && { released_calls: s.lifetime_calls, losses: s.lifetime_losses }, terms_id: q.termsId, terms: q.terms,
+          record: s && { released_calls: s.lifetime_calls, losses: s.lifetime_losses, splits: (s as { splits?: number }).splits ?? 0 }, terms_id: q.termsId, terms: q.terms,
           panel: q.terms ? (q.terms.panel ? 'experimental: three AI jurors judge content disputes' : 'off: refunds by rule only') : undefined,
         }, null, 2));
         return 0;

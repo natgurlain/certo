@@ -95,14 +95,14 @@ describe('replay mode', () => {
     } finally { server.close(); }
   });
 
-  it('seller majority, and no majority is not submitted', async () => {
+  it('seller majority, and a split panel is submitted too (seller\'s offer, G17)', async () => {
     let m = mockChain();
     let out = await new PanelService({ chain: m.chain, jurors: new ReplayJurors(await fixtureDir(['Y', 'X', 'Y'])) }).handleCase(m.caseReq);
     expect(out).toMatchObject({ winner: 'seller', submitted: true });
     m = mockChain();
     out = await new PanelService({ chain: m.chain, jurors: new ReplayJurors(await fixtureDir(['X', 'maybe', ''])) }).handleCase(m.caseReq);
-    expect(out).toMatchObject({ votes: ['X', 'abstain', 'abstain'], winner: null, submitted: false });
-    expect(m.resolved).toHaveLength(0);
+    expect(out).toMatchObject({ votes: ['X', 'abstain', 'abstain'], winner: null, submitted: true, reason: expect.stringMatching(/split panel/) });
+    expect((m.resolved[0] as { ballots: unknown[] }).ballots).toHaveLength(3);
   });
 
   it('rejects a ballot that does not verify under the on-chain juror key', async () => {

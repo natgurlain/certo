@@ -51,7 +51,7 @@ pub fn vote_of(juror_idx: usize, response_body: &str) -> Vote {
     }
 }
 
-/// `Some(true)` buyer wins, `Some(false)` seller wins, `None` no majority (need ≥ 2 equal votes).
+/// `Some(true)` buyer wins, `Some(false)` seller wins, `None` a split (need ≥ 2 equal votes; G17).
 pub fn majority(votes: &[Vote]) -> Option<bool> {
     let b = votes.iter().filter(|v| **v == Vote::Buyer).count();
     let s = votes.iter().filter(|v| **v == Vote::Seller).count();
@@ -143,15 +143,49 @@ impl Contract {
             req_shas.push(to_hex(&req_sha));
             resp_shas.push(to_hex(&resp_sha));
         }
-        let buyer_wins = majority(&votes).unwrap_or_else(|| fail("E_NO_MAJORITY"));
+        let vote_strs: Vec<&str> = votes.iter().map(|v| v.as_str()).collect();
+        events::emit(
+            "ballots_verified",
+            json!({
+                "call_id": call_id, "epoch": self.juror_epoch,
+                "kinds": ballots.iter().map(|b| b.kind.clone()).collect::<Vec<_>>(),
+                "request_sha256s": req_shas, "response_sha256s": resp_shas, "votes": vote_strs,
+            }),
+        );
+        let mut br = self.buyer_rec(&c.buyer);
+        s.disputed_reserved -= c.reserve;
+
+        let Some(buyer_wins) = majority(&votes) else {
+            // G17: three verified ballots without a majority settle at once at the seller's offer
+            // (never more: no money moves to the buyer without a majority), stake back, no loss,
+            // fee step or stake change; the split is counted on both records.
+            #[cfg(not(feature = "no_g17"))]
+            let bps = seller_bps;
+            #[cfg(feature = "no_g17")]
+            let bps = fees::midpoint_bps(buyer_offer_bps, seller_bps);
+            let refund = c.price * bps as u128 / 10_000;
+            s.bond -= refund;
+            s.splits += 1;
+            br.splits += 1;
+            self.buyers.insert(c.buyer.clone(), br);
+            self.sellers.insert(c.seller.clone(), s);
+            self.calls.remove(&call_id);
+            self.pay_out(&c.buyer, refund + d.stake);
+            events::emit(
+                "dispute_resolved",
+                json!({
+                    "call_id": call_id, "tier": "split", "votes": vote_strs, "refund": U128(refund), "refund_bps": bps,
+                    "stake_returned": U128(d.stake),
+                }),
+            );
+            return;
+        };
 
         let base = self.base_stake(c.price);
         let offer = if buyer_wins { buyer_offer_bps } else { seller_bps };
         let st = fees::settle_panel(c.price, d.stake, base, offer, buyer_wins);
         s.bond -= st.bond_debit;
-        s.disputed_reserved -= c.reserve;
         self.treasury += st.treasury_credit;
-        let mut br = self.buyer_rec(&c.buyer);
         if buyer_wins {
             self.record_seller_loss(&c.seller, &mut s, st.refund);
             fees::buyer_won(&mut br);
@@ -162,16 +196,6 @@ impl Contract {
         self.sellers.insert(c.seller.clone(), s);
         self.calls.remove(&call_id);
         self.pay_out(&c.buyer, st.to_buyer);
-
-        let vote_strs: Vec<&str> = votes.iter().map(|v| v.as_str()).collect();
-        events::emit(
-            "ballots_verified",
-            json!({
-                "call_id": call_id, "epoch": self.juror_epoch,
-                "kinds": ballots.iter().map(|b| b.kind.clone()).collect::<Vec<_>>(),
-                "request_sha256s": req_shas, "response_sha256s": resp_shas, "votes": vote_strs,
-            }),
-        );
         events::emit(
             "dispute_resolved",
             json!({

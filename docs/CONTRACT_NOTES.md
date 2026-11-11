@@ -9,10 +9,10 @@ open. Source: `contracts/certo/src/` (`lib`, `pay`, `dispute`, `panel`,
 
 | Command | Does |
 |---|---|
-| `./scripts/build-contracts.sh` (`make build`) | Builds `res/certo.wasm`, `res/mock_usdc.wasm`, `res/guards/certo_no_g{1..8,16}.wasm`, writes `res/SHA256SUMS`. Local paths are remapped out of the wasm |
+| `./scripts/build-contracts.sh` (`make build`) | Builds `res/certo.wasm`, `res/mock_usdc.wasm`, `res/guards/certo_no_g{1..8,16,17}.wasm`, writes `res/SHA256SUMS`. Local paths are remapped out of the wasm |
 | `cargo test -p certo --lib` | Unit tests: encoders, golden vectors, fee steps, settlement table, `parse_vote`, rules, exposure, G13 property test |
 | `cargo test -p certo --test sandbox` | Sandbox tests for T06/T07/T08 against `res/*.wasm` |
-| `cargo test -p certo --test guards -- --nocapture` | G1–G16; for G1–G8 and G16 the same attack against `res/certo.wasm` and `res/guards/certo_no_gN.wasm`, printing the pair |
+| `cargo test -p certo --test guards -- --nocapture` | G1–G17; for G1–G8, G16 and G17 the same attack against `res/certo.wasm` and `res/guards/certo_no_gN.wasm`, printing the pair |
 | `cargo test --workspace` | All of the above |
 
 Sandbox tests deploy the wasm in `res/`, so run the build script first after a
@@ -187,14 +187,14 @@ Views:
 get_config({}) -> {owner, token, resolver, cfg, treasury, fee_bps: [..], sweep_max, receipt_prefix}
 get_jurors({}) -> {epoch, jurors: [JurorArg], gateway_key, accept_gateway}
 get_seller({id}) -> null | {bond, reserved, disputed_reserved, free_capacity, fee_idx, fee_bps, window_ms,
-                     lifetime_calls, lifetime_losses, lifetime_volume, clean_calls_since_step,
+                     lifetime_calls, lifetime_losses, splits, lifetime_volume, clean_calls_since_step,
                      clean_volume_since_step, recovery_volume, receipt_pubkey, queue_len}
 get_terms({seller, terms_id}) -> null | {text, required_fields, as_of_field, max_age_s, panel}
 get_call({call_id}) -> null | {call_id, buyer, seller, terms_id, price, fee, reserve, request_hash,
                      paid_at_ms, expires_at_ms, status: "Open"|"NonDeliveryClaimed"|"Disputed"|"Answered",
                      dispute: null | {kind, opened_at_ms, answer_by_ms, stake, buyer_commit, response_hash,
                                       status_code, served_at_ms, seller_offer_bps, answered_at_ms}}
-get_buyer({id}) -> {disputes_won, disputes_lost, stake_mult_log2, stake_multiplier}
+get_buyer({id}) -> {disputes_won, disputes_lost, stake_mult_log2, stake_multiplier, splits}
 quote({seller, price}) -> {fee, fee_bps, stake, reserve, free_capacity, would_fit}
 build_panel_request({juror_idx, terms_text, request_canon, response_body, buyer_bps, seller_bps}) -> string
 receipt_text({call_id, response_hash, status_code, served_at_ms}) -> string
@@ -273,15 +273,17 @@ Events: `jurors_set`, `resolver_set`, `treasury_withdrawn`, `seller_registered`,
     signature over given request and response bodies and ignores
     `accept_gateway`. `Ballot.request_hash` is accepted in JSON and ignored by the
     real contract; only `no_g8` uses it.
-14. **Guard features.** All nine `no_gN` features are built into `res/guards/`
+14. **Guard features.** All ten `no_gN` features are built into `res/guards/`
     (the design lists six; `no_g4` and `no_g6` cost nothing extra; `no_g16` was
-    added with the panel-timeout rule of item 5):
+    added with the panel-timeout rule of item 5, `no_g17` with the split rule of item 17):
     G1 ballot signature check, G2 exposure check in `pay`, G3 status check when a
     dispute opens, G4 window check (disputes, `claim_error`, `claim_rule`), G5
     receipt signature check, G6 exposure check in `withdraw_bond`, G7 evidence
     hash check in `resolve`, G8 contract-built request hash (the weakened build
     trusts `Ballot.request_hash`), G16 panel-timeout payout (the weakened build pays
-    the midpoint of the two offers with a valid reveal, as before item 5 changed).
+    the midpoint of the two offers with a valid reveal, as before item 5 changed),
+    G17 split-panel payout (the weakened build pays the midpoint of the two offers on
+    a split instead of the seller's offer).
 15. **No real NEAR AI recording exists yet.** Ballot tests sign with generated
     ed25519 keys in the exact `provider_tee` / `gateway` text format. The test
     `t07_recorded_nearai_signatures_verify_on_chain` reads every
@@ -293,6 +295,34 @@ Events: `jurors_set`, `resolver_set`, `treasury_withdrawn`, `seller_registered`,
     with three synthetic recordings).
 16. **`get_seller.free_capacity`** includes the simulated sweep; `reserved` is
     the stored (possibly stale-high) value.
+17. **Split panel: the seller's offer, at once, on both records (G17).** When
+    `resolve` carries exactly three ballots, all three signatures verify over the
+    prompts the contract builds, and there is no majority (fewer than two equal
+    X/Y votes; abstentions are signed answers that are neither), the dispute
+    settles in that transaction: the buyer gets `price × seller_offer_bps / 10000`
+    from the bond plus its whole stake; no seller loss, no fee step, no ruling fee,
+    no change to the buyer's stake multiplier; `splits` (u32) += 1 on both the
+    seller's and the buyer's record (`get_seller`, `get_buyer`; `certo_quote`
+    shows `seller_record.split_disputes`). Nothing reads `splits` for fees: it is
+    information for the other side of the next call. The call is removed.
+    Events: `ballots_verified` as for a majority, then
+    `dispute_resolved{call_id, tier: "split", votes, refund, refund_bps, stake_returned}`.
+    `E_NO_MAJORITY` no longer exists. Fewer than three verifying ballots still fail
+    with `E_BALLOT_SIG`, so a split cannot be faked to close a dispute. The same
+    resolver window applies as for any `resolve` (resolver only for 60 s, then
+    anyone with the reveal, i.e. the buyer).
+    Why: before, a split failed with `E_NO_MAJORITY` and waited for the
+    panel-timeout rule, which pays the seller's offer anyway; in the kill test one
+    seller-planted line split a case the panel otherwise gave the buyer 3–0
+    (`docs/KILLTEST.md` run 2, INJ-R-B2-01). A midpoint on a split was rejected
+    (maintainer decision, 2026-11-11): a buyer could provoke abstentions with its own
+    request text (up to 1,024 bytes, inside the prompt) or collect them by re-asking,
+    and take half the price from honest sellers. Under this rule no money moves to the
+    buyer without a majority; a planter keeps the seller's offer, but not a clean
+    record, and the planted text is public in the transaction arguments.
+    Known costs: a split is final, so the buyer cannot re-ask for a majority; a buyer
+    that re-asks until a split can add a split to an honest seller's record (it gains
+    no money and the split is on its own record too).
 
 ## Measured (`res/certo.wasm` of this build, macOS arm64; nearcore 2.10.0, 2.14.0 in brackets where different)
 
