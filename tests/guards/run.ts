@@ -10,7 +10,7 @@ import {
   receiptText, requestCanon, requestHash, sha256Hex, signBase64, syntheticChatResponse, toBase64, toHex,
   type ContractBallot, type Ed25519Key, type TxResult,
 } from '@certo/core';
-import { LocalChain, WASM } from '../../apps/demo/src/sandbox.js';
+import { LocalChain, WASM, demoConfig } from '../../apps/demo/src/sandbox.js';
 import { addSeller, deployMarket, type Market, type TracedChain } from '../../apps/demo/src/world.js';
 
 const PRICE = '400000';
@@ -198,19 +198,23 @@ const GUARDS: Guard[] = [
     async attack(e) {
       // an honest call disputed at 100 %; the seller answers 0 %; the buyer keeps its reveal from the panel
       const id = await answeredDispute(e, GOOD_BODY);
-      await e.m.chain.advancePast((await e.b.getCall(id))!.dispute!.answered_at_ms + 300_000);
+      await e.m.chain.advancePast((await e.b.getCall(id))!.dispute!.answered_at_ms + PANEL_DEADLINE_G16);
       const tx = await attempt(() => e.b.resolveDefault({ call_id: id, buyer_offer_bps: 10_000, salt: SALT }));
       return { tx, effect: async () => `buyer took ${toUnits(BigInt(String(resolved(tx).refund)))} of 0.400000 with no verdict (${String(resolved(tx).reason)})` };
     },
   },
 ];
 
+/** G16's market uses a 60 s panel deadline (demo config: 300 s) so the sandbox fast-forwards fewer blocks. */
+const PANEL_DEADLINE_G16 = 60_000;
+
 const toUnits = (n: bigint) => `${n / 1_000_000n}.${(n % 1_000_000n).toString().padStart(6, '0')}`;
 
-async function setup(chain: LocalChain, name: string, wasm: string, bond: string, windowMs: number): Promise<Env> {
+async function setup(chain: LocalChain, name: string, wasm: string, bond: string, windowMs: number, panelDeadlineMs?: number): Promise<Env> {
   const ids = { contract: name, seller: `${name}-seller`, buyer: `${name}-buyer`, resolver: `${name}-resolver` };
   const m = await deployMarket({
     chain, contract: ids.contract, token: 'usdc', owner: ids.resolver, resolver: ids.resolver, wasm,
+    cfg: panelDeadlineMs ? { ...demoConfig(), panel_deadline_ms: panelDeadlineMs } : undefined,
     jurors: JURORS.map((j, i) => ({ model_id: j.model, pubkey: toHex(JUROR_KEYS[i]!.publicKey), attestation_sha256: '0'.repeat(64) })),
     gatewayKey: null,
   });
@@ -228,7 +232,7 @@ async function runPair(chain: LocalChain, g: Guard): Promise<Row> {
   const bond = g.n === 2 || g.n === 6 ? '1000000' : '50000000';
   const windowMs = g.n === 4 ? 60_000 : 120_000;
   const one = async (variant: 'real' | 'weak') => {
-    const e = await setup(chain, `g${g.n}-${variant}`, variant === 'real' ? WASM.certo : WASM.guard(g.n), bond, windowMs);
+    const e = await setup(chain, `g${g.n}-${variant}`, variant === 'real' ? WASM.certo : WASM.guard(g.n), bond, windowMs, g.n === 16 ? PANEL_DEADLINE_G16 : undefined);
     const { tx, effect } = await g.attack(e);
     const rejected = g.held ? g.held(tx) : tx.failures.some((f) => f.includes(g.code));
     if (rejected) return { rejected: true, text: g.held ? g.code : `rejected ${g.code}` };
