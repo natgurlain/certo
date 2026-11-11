@@ -1,0 +1,40 @@
+# Certo
+
+> Paid HTTP API calls for AI agents with bonded refunds, on NEAR. The seller is paid in the buyer's own payment transaction; the seller's USDC bond covers a refund for a short window after each call (120 s by default). Errors and broken rules are refunded by rule; a well-formed but wrong answer goes to three NEAR AI TEE models whose signed votes the contract verifies.
+
+## Try it (local sandbox, no keys)
+- `npm ci && make playground` in this repo: keeps a sandbox, two sellers, the panel and a funded buyer running, and writes ~/.certo/playground.env
+- Add the MCP server: `claude mcp add certo -- npx certo-mcp --playground` (run from the repo; Codex: command `npx`, args `["certo-mcp","--playground"]`, and `tool_timeout_sec = 120` since certo_dispute may wait up to 90 s)
+- Example endpoints are in CERTO_EXAMPLE_URLS in that file and in the MCP server's instructions
+- Same from a shell: `npx certo --playground quote <url>`, `npx certo --playground call <url>`, `npx certo --playground dispute <call_id>`
+
+## MCP tools (all amounts in results are USDC decimal strings, fields ending in _usdc)
+- certo_quote {url}: look without paying: price, bond, free capacity, fee, record, refund window, terms, your dispute stake. Example: {"url":"http://127.0.0.1:PORT/v1/holders?token=NEAR&top=5"}
+- certo_call {url, method?, body?, max_price?}: pay and get the body, call_id, refund_window_until. Refused above CERTO_MAX_PRICE (default 1.00 USDC). Example: {"url":"...","max_price":"0.50"}
+- certo_dispute {call_id, kind?, offer_pct?, wait_s?}: get money back; waits (default 90 s) and returns the final outcome with refund_usdc. Example: {"call_id":"cheapfacts/9f0c..."}
+- certo_status {call_id?, seller?}: open / released (seller kept it) / in_dispute / refunded / cured / unknown (never paid from here)
+
+## Dispute kinds
+- content (default): body is valid but wrong for the terms. Sealed offer (offer_pct, default 100) vs the seller's offer; three AI jurors pick the closer one. Win: your offer refunded, stake back. Lose: stake forfeited, you get the seller's offer, your next stake doubles (up to 16x)
+- error: seller signed HTTP >= 500. Full refund by rule, no stake, one transaction
+- rule: body breaks a published rule (not JSON, missing required field, stale). Full refund by rule, no stake
+- non_delivery: paid, no valid response (TIMEOUT, NO_RECEIPT, RECEIPT_MISMATCH, BAD_RECEIPT_SIG). Seller cures (stake back, no refund) or you get a full refund after its answer deadline
+- Stake for content/non_delivery: max(0.02 USDC, 5% of price) x your multiplier; shown as dispute_stake_usdc
+
+## Amounts
+- Inputs: "0.40", "1 USDC" or a JSON number are USDC; a bare integer string ("400000") is base units (6 decimals)
+
+## Error codes and what to do
+- Nothing paid: PRICE_TOO_HIGH (raise max_price only if worth it), WOULD_NOT_FIT (seller bond full; retry later), NOT_PROTECTED / NO_SCHEME (not a Certo endpoint), WRONG_CONTRACT, SELLER_UNKNOWN, TERMS_UNKNOWN, PAY_FAILED (tokens returned)
+- Paid, not delivered: TIMEOUT, NO_RECEIPT, RECEIPT_MISMATCH, BAD_RECEIPT_SIG: certo_dispute kind non_delivery with the returned call_id
+- Dispute: E_WINDOW_CLOSED (too late), E_STATUS (already disputed or settled; see certo_status), E_NO_PANEL_TERMS (use rule/error), E_RULE_NOT_BROKEN (use content), E_HTTP_STATUS (wrong kind for the status), NO_STATE (no local record of that call)
+- certo_dispute returning state "waiting": call it again with the same call_id; it continues and never opens a second dispute
+
+## Configuration (instead of --playground)
+- NEAR_RPC_URL, NEAR_NETWORK, CERTO_CONTRACT, CERTO_TOKEN, BUYER_ACCOUNT, BUYER_PRIVATE_KEY, PANEL_URL, CERTO_MAX_PRICE, CERTO_STATE_DIR (default ~/.certo/calls; call records and sealed-offer salts survive restarts)
+
+## Sellers
+- `npx certo seller init --bond 50 --terms terms.txt`: receipt key, register (1 NEAR deposit), terms, bond, prints the protect() snippet; see examples/seller.ts and packages/seller/README.md
+
+## Docs
+- README.md, docs/DESIGN.md (full design), contracts/certo/src (the contract)

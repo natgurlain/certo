@@ -42,3 +42,24 @@ export function stakeFor(price: string | bigint, opts: { stakeMin?: string | big
 export function refundFor(price: string | bigint, offerBps: number): string {
   return ((BigInt(price) * BigInt(offerBps)) / 10000n).toString();
 }
+
+/**
+ * An amount typed by a person or an agent. A JSON number, a string with a
+ * decimal point, or a string ending in "USDC" is USDC ("0.4", "1 USDC", 0.4);
+ * a bare integer string is base units ("400000" = 0.40 USDC). Returns base units.
+ */
+export function parseAmountInput(v: string | number): string {
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v) || v < 0) throw new Error(`invalid amount: ${v}`);
+    return parseUsdc(v);
+  }
+  const s = v.trim();
+  const usdc = /^(.*?)\s*usdc$/i.exec(s);
+  if (usdc) return parseUsdc(usdc[1]!);
+  if (/^\d+$/.test(s)) return BigInt(s).toString();
+  if (/^\d*\.\d*$/.test(s) && s !== '.') return parseUsdc(s.startsWith('.') ? `0${s}` : s);
+  throw new Error(`invalid amount "${v}": use USDC like "0.40" or "1 USDC", or base units like "400000"`);
+}
+
+/** Default buyer price cap when `CERTO_MAX_PRICE` is not set: 1.00 USDC. */
+export const DEFAULT_MAX_PRICE = '1000000';

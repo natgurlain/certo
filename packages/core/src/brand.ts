@@ -18,3 +18,5 @@ export const MCP_SERVER_NAME = 'certo-mcp';
 export const TOOL_PREFIX = 'certo';
 /** Environment-variable prefix used for contract/token account settings. */
 export const ENV_PREFIX = 'CERTO_';
+/** Public repository URL, shown to stock x402 clients in the 402 body (`extra.docs`); empty until published. */
+export const REPO_URL = '';

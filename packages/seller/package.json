@@ -3,9 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "types": "./src/index.ts",
-  "scripts": { "test": "vitest run", "typecheck": "tsc -p tsconfig.json" },
-  "dependencies": { "@certo/core": "0.1.0", "express": "^5.1.0" },
-  "devDependencies": { "@types/express": "^5.0.0" }
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@certo/core": "0.1.0",
+    "express": "^5.1.0",
+    "@near-js/accounts": "^2.5.1",
+    "@near-js/crypto": "^2.5.1",
+    "@near-js/providers": "^2.5.1",
+    "@near-js/signers": "^2.5.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0"
+  }
 }

@@ -297,3 +297,18 @@ describe('events, headers, normalisation', () => {
     expect(() => toHex32('abc')).toThrow();
   });
 });
+
+describe('parseAmountInput', async () => {
+  const { parseAmountInput } = await import('../src/amount.js');
+  it('USDC with a point, a USDC suffix or a JSON number; base units as a bare integer', () => {
+    expect(parseAmountInput('0.4')).toBe('400000');
+    expect(parseAmountInput('.5')).toBe('500000');
+    expect(parseAmountInput('1 USDC')).toBe('1000000');
+    expect(parseAmountInput('2.5usdc')).toBe('2500000');
+    expect(parseAmountInput(0.4)).toBe('400000');
+    expect(parseAmountInput(1)).toBe('1000000');
+    expect(parseAmountInput('400000')).toBe('400000');
+    for (const bad of ['abc', '-1', '1.2345678', '', '.', '1,5', 'NaN']) expect(() => parseAmountInput(bad)).toThrow();
+    expect(() => parseAmountInput(-1)).toThrow();
+  });
+});
