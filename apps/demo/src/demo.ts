@@ -6,11 +6,11 @@
  */
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { MakegoodClient, MakegoodError, simplePolicy, type CallResult } from '@makegood/buyer';
+import { CertoClient, CertoError, simplePolicy, type CallResult } from '@certo/buyer';
 import {
   HDR_PAYMENT_SIGNATURE, JURORS, PRODUCT_ID, PRODUCT_NAME, formatUsdc, type ContractError, type ContractEvent, type TxResult,
-} from '@makegood/core';
-import { LiveJurors, PanelService, ReplayJurors, createPanelApp, type CaseOutcome } from '@makegood/panel';
+} from '@certo/core';
+import { LiveJurors, PanelService, ReplayJurors, createPanelApp, type CaseOutcome } from '@certo/panel';
 import { Feed } from './feed.js';
 import { choosePanel, loadDemo, type PanelPlan } from './fixtures.js';
 import { LocalChain, repoFile, SANDBOX_VERSION } from './sandbox.js';
@@ -57,7 +57,7 @@ async function sandboxWorld(plan: PanelPlan, terms: Array<{ terms_id: string; te
   try {
     const market = await deployMarket({
       chain, contract: ACCOUNTS.contract, token: ACCOUNTS.token, owner: ACCOUNTS.owner, resolver: ACCOUNTS.resolver,
-      wasm: 'res/makegood.wasm', deployToken: true, jurors: plan.jurors, gatewayKey: plan.gatewayKey, acceptGateway: plan.acceptGateway,
+      wasm: 'res/certo.wasm', deployToken: true, jurors: plan.jurors, gatewayKey: plan.gatewayKey, acceptGateway: plan.acceptGateway,
     });
     const regs = await Promise.all([
       addSeller(market, { id: 'chainfacts', bond: BOND, terms }),
@@ -229,7 +229,7 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
     }
     return fetch(input, init);
   };
-  const buyer = (id: string) => new MakegoodClient({ chain: clientOf(id), fetch: buyerFetch });
+  const buyer = (id: string) => new CertoClient({ chain: clientOf(id), fetch: buyerFetch });
   const scout = buyer('scout');
   const liar = buyer('scout-liar');
   const urlOf = (s: string) => `${sellers[s]!.url}${fx.request}`;
@@ -249,7 +249,7 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
   const verifiedJurors = new Set<number>();
 
   /** Content dispute → seller's answer → panel → resolve. Returns the panel outcome. */
-  const contentDispute = async (scene: number, client: MakegoodClient, buyerId: string, r: CallResult): Promise<{ outcome: CaseOutcome; stake: string; t: number }> => {
+  const contentDispute = async (scene: number, client: CertoClient, buyerId: string, r: CallResult): Promise<{ outcome: CaseOutcome; stake: string; t: number }> => {
     const t = Date.now();
     const d = await client.dispute(r, { offerBps: 10_000 });
     say(`${buyerId} opened a content dispute: stake ${formatUsdc(d.stake)}, sealed offer (commitment ${short(d.commit)})`);
@@ -366,7 +366,7 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
           await scout.call(urlOf('cheapfacts'));
           throw new SceneFailure('the dead seller delivered');
         } catch (e) {
-          if (!(e instanceof MakegoodError) || !e.callId) throw e;
+          if (!(e instanceof CertoError) || !e.callId) throw e;
           callId = e.callId;
           say(`paid, no delivery (${e.code}) → claim non-delivery`);
           feed.emit({ kind: 'log', actor: 'scout', text: 'paid, nothing delivered → claim non-delivery' });

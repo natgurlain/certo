@@ -1,5 +1,5 @@
 /**
- * Regenerates fixtures/vectors.json from @makegood/core. Run: npx tsx packages/core/scripts/gen-vectors.ts
+ * Regenerates fixtures/vectors.json from @certo/core. Run: npx tsx packages/core/scripts/gen-vectors.ts
  * The tests check the committed file against the encoders and against
  * independent oracles (JSON.stringify), so a regenerated file is only accepted
  * if both still agree.
@@ -54,11 +54,11 @@ const PANEL_CASES = [
 ];
 
 export function generate() {
-  const receiptKey = ed25519FromLabel('makegood-vectors-receipt-key');
+  const receiptKey = ed25519FromLabel('certo-vectors-receipt-key');
   const receipts = [
-    { contract: 'makegood.test.near', callId: 'chainfacts.test.near/0123456789abcdef0123456789abcdef', buyer: 'scout.test.near', price: '400000', termsId: 'holders-v1', requestHash: sha256Hex(REQ_NEAR_TOP5), responseHash: sha256Hex(RESP_GOOD), statusCode: 200, servedAtMs: 1794300001234 },
-    { contract: 'makegood.test.near', callId: 'cheapfacts.test.near/fedcba9876543210fedcba9876543210', buyer: 'scout.test.near', price: '400000', termsId: 'holders-v1', requestHash: sha256Hex(REQ_NEAR_TOP5), responseHash: sha256Hex('{"error":"upstream unavailable"}'), statusCode: 503, servedAtMs: 1794300005000 },
-    { contract: 'v1.makegood.testnet', callId: 'chainfacts.sellers.makegood.testnet/00000000000000000000000000000001', buyer: 'scout.testnet', price: '10000', termsId: 'a-1', requestHash: sha256Hex(REQ_POST), responseHash: sha256Hex(''), statusCode: 500, servedAtMs: 0 },
+    { contract: 'certo.test.near', callId: 'chainfacts.test.near/0123456789abcdef0123456789abcdef', buyer: 'scout.test.near', price: '400000', termsId: 'holders-v1', requestHash: sha256Hex(REQ_NEAR_TOP5), responseHash: sha256Hex(RESP_GOOD), statusCode: 200, servedAtMs: 1794300001234 },
+    { contract: 'certo.test.near', callId: 'cheapfacts.test.near/fedcba9876543210fedcba9876543210', buyer: 'scout.test.near', price: '400000', termsId: 'holders-v1', requestHash: sha256Hex(REQ_NEAR_TOP5), responseHash: sha256Hex('{"error":"upstream unavailable"}'), statusCode: 503, servedAtMs: 1794300005000 },
+    { contract: 'v1.certo.testnet', callId: 'chainfacts.sellers.certo.testnet/00000000000000000000000000000001', buyer: 'scout.testnet', price: '10000', termsId: 'a-1', requestHash: sha256Hex(REQ_POST), responseHash: sha256Hex(''), statusCode: 500, servedAtMs: 0 },
   ];
   return {
     version: 1,

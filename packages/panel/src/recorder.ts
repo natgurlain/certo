@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { recordingFileName, type PanelRecording } from '@makegood/core';
+import { recordingFileName, type PanelRecording } from '@certo/core';
 import type { JurorSource } from './jurors.js';
 
 /** Writes `<dir>/<sha256 of request body>.json`. */

@@ -7,14 +7,14 @@
 // --cases: one case per line, either the kill-test shape {request_canon, response_body,
 //   buyer_offer_pct, seller_offer_pct, label?, terms_text?} or the core CaseInput shape
 //   {termsText, requestCanon, responseBody, buyerOfferBps, sellerOfferBps, side?}; each case
-//   becomes three request bodies (one per juror) built by @makegood/core. Terms default to
+//   becomes three request bodies (one per juror) built by @certo/core. Terms default to
 //   fixtures/killtest/terms.json.
 // --bodies: one exact chat-completions request body per line, as {"request_body": "...", "side"?: ...}.
 // With no input, records fixtures/demo/cases.jsonl if present, else the 60 kill-test cases.
 // Live mode needs NEARAI_API_KEY. In --synthetic mode each ballot votes for the line's
 // `label`/`side` (buyer|seller); lines without one are refused.
 import { readFileSync } from "node:fs";
-import { JURORS, buildPanelRequestFor, labelsFor, makeSyntheticBallot } from "@makegood/core";
+import { JURORS, buildPanelRequestFor, labelsFor, makeSyntheticBallot } from "@certo/core";
 import { apiKeyOrExit, askJuror } from "./lib/nearai.ts";
 import { PANEL_DIR, ballotToRecording, checkRecording, jurorIndexOf, saveRecording } from "./lib/ballots.ts";
 import { loadTerms } from "./lib/cases.ts";

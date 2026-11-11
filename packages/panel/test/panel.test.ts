@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   buildPanelRequestFor, ed25519Sign, fromBase64, JURORS, makeSyntheticBallot, nearaiSignatureText, newSalt, offerCommit,
   sha256Hex, syntheticChatResponse, syntheticJurorKey, toHex, verifyNearAiBallot, verifyRecording, type CallView, type PanelRecording,
-} from '@makegood/core';
+} from '@certo/core';
 import {
   createPanelApp, jurorsFromEnv, LiveJurors, PanelMissError, PanelService, RecordingJurors, ReplayJurors, saveRecording,
   type CaseRequest, type PanelChain,

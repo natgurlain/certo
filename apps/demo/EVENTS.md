@@ -20,5 +20,5 @@ opened mid-run (or after the run) shows the full state.
 | `vote` | `scene`, `callId`, `juror` (index), `model`, `vote: "buyer" \| "seller" \| "abstain"`, `sigVerified: boolean`, `latencyMs?` | One juror ballot; `sigVerified` true only after the contract accepted it. Send the three votes staggered (≥ 400 ms apart, in juror order) so the badges light one after another. |
 | `resolved` | `scene`, `callId`, `tier: "panel" \| "rule" \| "default"`, `winner: "buyer" \| "seller"`, `refund`, `votes?: "3-0"` etc. (always buyer–seller order), `elapsedMs` | Settlement done. |
 | `chain` | `event` (NEP-297 event name), `data` (object), `txHash` | Every contract event, for the footer. |
-| `log` | `actor`, `text` | Agent log lines, e.g. `"asked NEAR, got NEO → claim a makegood"`. |
+| `log` | `actor`, `text` | Agent log lines, e.g. `"asked NEAR, got NEO → claim a refund"`. |
 | `done` | `ok: boolean`, `summary` | Final line, e.g. `DEMO OK: 4/4 scenes, 3/3 juror signatures verified on chain`. |

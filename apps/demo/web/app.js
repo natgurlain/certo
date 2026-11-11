@@ -5,8 +5,8 @@
 // (docs/DESIGN.md 1.2). Rename here.
 // ---------------------------------------------------------------------------
 const BRAND = {
-  name: "Makegood",
-  tagline: "Agents pay instantly. Bad calls get made good.",
+  name: "Certo",
+  tagline: "Agents pay instantly. Bad calls get refunded.",
   badge: (bond, windowS) => `${BRAND.name} ✓ · bonded ${bond} USDC · refunds for ${windowS} s`,
   intro: "Your agent paid 0.40 for data. The data was wrong. Now what?",
   builtAt: "Built at NEAR HACKATHON",
@@ -309,7 +309,7 @@ function renderBuyers() {
     n.className = `note ${note?.cls ?? ""}`;
     n.textContent = note?.text ?? "";
     const logs = (S.logs[b.id] ?? []).slice(-2);
-    el.querySelector(".log").innerHTML = logs.map((l) => `<li class="${/makegood|claim/i.test(l) ? "claim" : ""}" title="${esc(l)}">${esc(l)}</li>`).join("");
+    el.querySelector(".log").innerHTML = logs.map((l) => `<li class="${/certo|claim/i.test(l) ? "claim" : ""}" title="${esc(l)}">${esc(l)}</li>`).join("");
   }
 }
 
@@ -397,7 +397,7 @@ function renderCase() {
   if (!d) {
     const cur = S.scenes[S.current];
     caseBox.innerHTML = `<div class="case-head"><span class="case-kind">No dispute</span></div><div class="idle">${
-      S.call ? `The seller was paid at once. Its bond covers a refund for ${Math.round((S.mode?.windowMs ?? DEFAULT_WINDOW_MS) / 1000)} s.` : cur ? "Waiting for the call…" : "The panel is idle until a buyer claims a makegood."}</div>`;
+      S.call ? `The seller was paid at once. Its bond covers a refund for ${Math.round((S.mode?.windowMs ?? DEFAULT_WINDOW_MS) / 1000)} s.` : cur ? "Waiting for the call…" : "The panel is idle until a buyer claims a certo."}</div>`;
   } else if (!isRule) {
     const sellerKnown = d.sellerOfferPct !== undefined && d.sellerOfferPct !== null;
     const revealed = sellerKnown || !!r;

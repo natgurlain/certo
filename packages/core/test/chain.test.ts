@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { NearMakegoodChain, sha256Hex, signAndSend, toBase64, fromHex } from '../src/index.js';
+import { NearCertoChain, sha256Hex, signAndSend, toBase64, fromHex } from '../src/index.js';
 
 // Minimal JSON-RPC stand-in answering `query/call_function` like a NEAR node.
 const views: Record<string, (args: Record<string, unknown>) => unknown> = {
@@ -37,9 +37,9 @@ beforeAll(async () => {
 });
 afterAll(() => server.close());
 
-describe('NearMakegoodChain views (mock RPC)', () => {
+describe('NearCertoChain views (mock RPC)', () => {
   it('calls the contract and token with 4.2 argument names and normalises the results', async () => {
-    const c = new NearMakegoodChain({ rpcUrl: url, contractId: 'mg.near', tokenId: 'usdc.near' });
+    const c = new NearCertoChain({ rpcUrl: url, contractId: 'mg.near', tokenId: 'usdc.near' });
     expect(c.network).toBe('near:sandbox');
     expect(await c.getConfig()).toMatchObject({ owner: 'o.near', min_bond: '1000000', answer_ms: 5000, treasury: '4000' });
     const call = (await c.getCall('s.near/aa'))!;
@@ -55,7 +55,7 @@ describe('NearMakegoodChain views (mock RPC)', () => {
     ]);
   });
   it('refuses to sign without an account', async () => {
-    const c = new NearMakegoodChain({ rpcUrl: url, contractId: 'mg.near', tokenId: 'usdc.near', network: 'near:testnet' });
+    const c = new NearCertoChain({ rpcUrl: url, contractId: 'mg.near', tokenId: 'usdc.near', network: 'near:testnet' });
     await expect(c.answer('s.near/aa', 0)).rejects.toThrow(/no signing account/);
   });
 });

@@ -1,5 +1,5 @@
 {
-  "name": "@makegood/buyer",
+  "name": "@certo/buyer",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,18 +8,18 @@
   },
   "types": "./src/index.ts",
   "bin": {
-    "makegood": "./bin/makegood.js"
+    "certo": "./bin/certo.js"
   },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@makegood/core": "0.1.0",
+    "@certo/core": "0.1.0",
     "tsx": "^4.19.0"
   },
   "devDependencies": {
-    "@makegood/seller": "0.1.0",
+    "@certo/seller": "0.1.0",
     "express": "^5.1.0",
     "@types/express": "^5.0.0"
   }

@@ -6,9 +6,9 @@
 //   npx tsx scripts/deploy-testnet.ts --jurors synthetic        deploy with the published TEST keys (loud warning)
 //   npx tsx scripts/deploy-testnet.ts --accept-gateway          first deployment only: accept gateway-signed ballots (L3-gateway)
 //
-// Steps: deploy res/mock_usdc.wasm and res/makegood.wasm to MAKEGOOD_TOKEN and
-// MAKEGOOD_CONTRACT and call `new` (only if the account holds no code); check the
-// juror keys (set_jurors with MAKEGOOD_OWNER_PRIVATE_KEY if they differ); register
+// Steps: deploy res/mock_usdc.wasm and res/certo.wasm to CERTO_TOKEN and
+// CERTO_CONTRACT and call `new` (only if the account holds no code); check the
+// juror keys (set_jurors with CERTO_OWNER_PRIVATE_KEY if they differ); register
 // both sellers with the demo terms; top their bonds up to 50.00 and the buyers'
 // balances up to 10.00. `make testnet-demo` runs the same steps before the scenes.
 // Exit codes: 0 done / dry run ready, 2 configuration incomplete, 1 failure.

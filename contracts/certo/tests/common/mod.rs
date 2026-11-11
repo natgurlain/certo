@@ -24,9 +24,9 @@ pub const WRONG_BODY: &str = r#"{"token":"NEO","as_of":1794300000,"total_holders
 pub fn res(path: &str) -> String {
     format!("{}/../../res/{}", env!("CARGO_MANIFEST_DIR"), path)
 }
-pub const REAL: &str = "makegood.wasm";
+pub const REAL: &str = "certo.wasm";
 pub fn guard(n: u8) -> String {
-    format!("guards/makegood_no_g{n}.wasm")
+    format!("guards/certo_no_g{n}.wasm")
 }
 
 pub fn sha(b: &[u8]) -> [u8; 32] {
@@ -68,7 +68,7 @@ pub struct Env {
     pub quote_n: std::sync::atomic::AtomicU64,
 }
 
-/// Fresh sandbox with the given makegood wasm; seller registered (window 120 s) with
+/// Fresh sandbox with the given certo wasm; seller registered (window 120 s) with
 /// terms `holders-v1` (panel) and `rules-v1` (rule checks), bonded 50.00; buyer holds 100.00.
 pub async fn setup(wasm: &str) -> anyhow::Result<Env> {
     setup_with(wasm, cfg(), 50 * USDC).await

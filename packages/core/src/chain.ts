@@ -54,7 +54,7 @@ export interface BuildPanelRequestArgs {
  * Calls are signed by the account the implementation was built with.
  * Inject a fake of (a `Pick` of) this interface in unit tests.
  */
-export interface MakegoodChain {
+export interface CertoChain {
   readonly contractId: string;
   readonly tokenId: string;
   /** Account that signs calls (undefined for a view-only client). */
@@ -171,8 +171,8 @@ export async function signAndSend(account: Account, params: Parameters<Account['
   }
 }
 
-/** `MakegoodChain` over NEAR JSON-RPC (sandbox or testnet). */
-export class NearMakegoodChain implements MakegoodChain {
+/** `CertoChain` over NEAR JSON-RPC (sandbox or testnet). */
+export class NearCertoChain implements CertoChain {
   readonly contractId: string;
   readonly tokenId: string;
   readonly accountId?: string;
@@ -192,8 +192,8 @@ export class NearMakegoodChain implements MakegoodChain {
   }
 
   /** Same chain, different signing account. */
-  as(accountId: string, privateKey: string): NearMakegoodChain {
-    return new NearMakegoodChain({
+  as(accountId: string, privateKey: string): NearCertoChain {
+    return new NearCertoChain({
       rpcUrl: this.provider.connection.url, contractId: this.contractId, tokenId: this.tokenId, network: this.network, accountId, privateKey,
     });
   }
@@ -294,11 +294,11 @@ export class NearMakegoodChain implements MakegoodChain {
 }
 
 /** Build a chain client from environment variables (testnet scripts). */
-export function chainFromEnv(env: NodeJS.ProcessEnv = process.env, account?: { accountId: string; privateKey: string }): NearMakegoodChain {
-  const contractId = env.MAKEGOOD_CONTRACT;
-  const tokenId = env.MAKEGOOD_TOKEN;
-  if (!contractId || !tokenId) throw new Error('MAKEGOOD_CONTRACT and MAKEGOOD_TOKEN must be set');
-  return new NearMakegoodChain({
+export function chainFromEnv(env: NodeJS.ProcessEnv = process.env, account?: { accountId: string; privateKey: string }): NearCertoChain {
+  const contractId = env.CERTO_CONTRACT;
+  const tokenId = env.CERTO_TOKEN;
+  if (!contractId || !tokenId) throw new Error('CERTO_CONTRACT and CERTO_TOKEN must be set');
+  return new NearCertoChain({
     rpcUrl: env.NEAR_RPC_URL ?? 'https://rpc.testnet.fastnear.com',
     contractId, tokenId,
     network: env.NEAR_NETWORK ? `near:${env.NEAR_NETWORK}` : undefined,

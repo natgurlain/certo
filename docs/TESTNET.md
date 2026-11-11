@@ -7,7 +7,7 @@ procedure for the human who owns the accounts. Nothing in the repository creates
 holds keys; keys live only in `.env` (git-ignored).
 
 Status on 2026-11-11: the code path is written and was exercised end to end twice against a
-local sandbox whose accounts carry the testnet names (`v1.makegood.testnet`, …) and throwaway
+local sandbox whose accounts carry the testnet names (`v1.certo.testnet`, …) and throwaway
 local keys: deployment, juror-key switch with `set_jurors`, a second idempotent run, and the
 refusals listed under "Errors". It has **not** been run on testnet. No testnet account exists yet.
 
@@ -17,8 +17,8 @@ refusals listed under "Errors". It has **not** been run on testnet. No testnet a
 |---|---|
 | RPC | `NEAR_RPC_URL`, default `https://rpc.testnet.fastnear.com` |
 | Explorer links in the output | `NEAR_EXPLORER_URL` + `/txns/<hash>`, default `https://testnet.nearblocks.io` |
-| Contract | `res/makegood.wasm` on `MAKEGOOD_CONTRACT`; owner `MAKEGOOD_OWNER`, resolver `RESOLVER_ACCOUNT` |
-| Token | `res/mock_usdc.wasm` (mock USDC, 6 decimals, open `mint`) on `MAKEGOOD_TOKEN` |
+| Contract | `res/certo.wasm` on `CERTO_CONTRACT`; owner `CERTO_OWNER`, resolver `RESOLVER_ACCOUNT` |
+| Token | `res/mock_usdc.wasm` (mock USDC, 6 decimals, open `mint`) on `CERTO_TOKEN` |
 | Contract settings | as `make demo`, except the seller's answer/cure window: **30 s** (`answer_ms` 30000; 5 s in `make demo`). Dispute window 120 s, resolver slot 60 s, panel deadline 300 s |
 | Sellers | `chainfacts`, `cheapfacts` registered with the demo terms `holders-v1`; bond topped up to 50.000000 before each run. Their receipt keys are derived from each seller's NEAR secret key (not published) |
 | Buyers | `scout`, `scout-liar`; balance topped up to 10.000000 mock USDC before each run |
@@ -38,32 +38,32 @@ Funding needed per account (the dry run in step 4 checks these minimums):
 
 | Account | Env variable | Minimum | Why |
 |---|---|---|---|
-| `makegood.testnet` | `MAKEGOOD_OWNER` | 0.1 NEAR left after funding the others | contract owner; parent of the others |
-| `v1.makegood.testnet` | `MAKEGOOD_CONTRACT` | 5 NEAR | code storage of a 354 KB wasm (~3.5 NEAR) plus state |
-| `usdc.makegood.testnet` | `MAKEGOOD_TOKEN` | 2 NEAR | code storage of a 167 KB wasm (~1.7 NEAR) plus balances |
-| `resolver.makegood.testnet` | `RESOLVER_ACCOUNT` | 0.5 NEAR | gas for `resolve` |
-| `sellers.makegood.testnet` | (none) | 0.1 NEAR left | parent of the seller accounts only |
-| `chainfacts.sellers.makegood.testnet` | `SELLER_CHAINFACTS_ACCOUNT` | 1.5 NEAR | 1 NEAR registration deposit, gas |
-| `cheapfacts.sellers.makegood.testnet` | `SELLER_CHEAPFACTS_ACCOUNT` | 1.5 NEAR | as above |
-| `scout.makegood.testnet` | `BUYER_SCOUT_ACCOUNT` | 0.5 NEAR | gas |
-| `scout-liar.makegood.testnet` | `BUYER_SCOUT_LIAR_ACCOUNT` | 0.5 NEAR | gas |
+| `certo.testnet` | `CERTO_OWNER` | 0.1 NEAR left after funding the others | contract owner; parent of the others |
+| `v1.certo.testnet` | `CERTO_CONTRACT` | 5 NEAR | code storage of a 354 KB wasm (~3.5 NEAR) plus state |
+| `usdc.certo.testnet` | `CERTO_TOKEN` | 2 NEAR | code storage of a 167 KB wasm (~1.7 NEAR) plus balances |
+| `resolver.certo.testnet` | `RESOLVER_ACCOUNT` | 0.5 NEAR | gas for `resolve` |
+| `sellers.certo.testnet` | (none) | 0.1 NEAR left | parent of the seller accounts only |
+| `chainfacts.sellers.certo.testnet` | `SELLER_CHAINFACTS_ACCOUNT` | 1.5 NEAR | 1 NEAR registration deposit, gas |
+| `cheapfacts.sellers.certo.testnet` | `SELLER_CHEAPFACTS_ACCOUNT` | 1.5 NEAR | as above |
+| `scout.certo.testnet` | `BUYER_SCOUT_ACCOUNT` | 0.5 NEAR | gas |
+| `scout-liar.certo.testnet` | `BUYER_SCOUT_LIAR_ACCOUNT` | 0.5 NEAR | gas |
 
 Total about 13 NEAR. How much the faucet gives a new account is not verified here; check with
-`near state makegood.testnet` after the first command and top up from https://near-faucet.io
+`near state certo.testnet` after the first command and top up from https://near-faucet.io
 (HACKATHON.md Q-008) if it is below 13.5 NEAR.
 
 ```sh
-near create-account makegood.testnet --useFaucet
-near state makegood.testnet                      # need ≥ 13.5 NEAR before the next commands
+near create-account certo.testnet --useFaucet
+near state certo.testnet                      # need ≥ 13.5 NEAR before the next commands
 
-near create-account v1.makegood.testnet        --masterAccount makegood.testnet --initialBalance 5.5
-near create-account usdc.makegood.testnet      --masterAccount makegood.testnet --initialBalance 2.5
-near create-account resolver.makegood.testnet  --masterAccount makegood.testnet --initialBalance 0.6
-near create-account scout.makegood.testnet     --masterAccount makegood.testnet --initialBalance 0.6
-near create-account scout-liar.makegood.testnet --masterAccount makegood.testnet --initialBalance 0.6
-near create-account sellers.makegood.testnet   --masterAccount makegood.testnet --initialBalance 3.4
-near create-account chainfacts.sellers.makegood.testnet --masterAccount sellers.makegood.testnet --initialBalance 1.6
-near create-account cheapfacts.sellers.makegood.testnet --masterAccount sellers.makegood.testnet --initialBalance 1.6
+near create-account v1.certo.testnet        --masterAccount certo.testnet --initialBalance 5.5
+near create-account usdc.certo.testnet      --masterAccount certo.testnet --initialBalance 2.5
+near create-account resolver.certo.testnet  --masterAccount certo.testnet --initialBalance 0.6
+near create-account scout.certo.testnet     --masterAccount certo.testnet --initialBalance 0.6
+near create-account scout-liar.certo.testnet --masterAccount certo.testnet --initialBalance 0.6
+near create-account sellers.certo.testnet   --masterAccount certo.testnet --initialBalance 3.4
+near create-account chainfacts.sellers.certo.testnet --masterAccount sellers.certo.testnet --initialBalance 1.6
+near create-account cheapfacts.sellers.certo.testnet --masterAccount sellers.certo.testnet --initialBalance 1.6
 ```
 
 If a name is taken, choose others and put them in `.env`; any `.testnet` names work.
@@ -77,22 +77,22 @@ in afterwards if you had one.
 ```sh
 grep -v '_PRIVATE_KEY=' .env.example > .env
 for pair in \
-  MAKEGOOD_OWNER_PRIVATE_KEY:makegood.testnet \
-  MAKEGOOD_CONTRACT_PRIVATE_KEY:v1.makegood.testnet \
-  MAKEGOOD_TOKEN_PRIVATE_KEY:usdc.makegood.testnet \
-  RESOLVER_PRIVATE_KEY:resolver.makegood.testnet \
-  SELLER_CHAINFACTS_PRIVATE_KEY:chainfacts.sellers.makegood.testnet \
-  SELLER_CHEAPFACTS_PRIVATE_KEY:cheapfacts.sellers.makegood.testnet \
-  BUYER_SCOUT_PRIVATE_KEY:scout.makegood.testnet \
-  BUYER_SCOUT_LIAR_PRIVATE_KEY:scout-liar.makegood.testnet; do
+  CERTO_OWNER_PRIVATE_KEY:certo.testnet \
+  CERTO_CONTRACT_PRIVATE_KEY:v1.certo.testnet \
+  CERTO_TOKEN_PRIVATE_KEY:usdc.certo.testnet \
+  RESOLVER_PRIVATE_KEY:resolver.certo.testnet \
+  SELLER_CHAINFACTS_PRIVATE_KEY:chainfacts.sellers.certo.testnet \
+  SELLER_CHEAPFACTS_PRIVATE_KEY:cheapfacts.sellers.certo.testnet \
+  BUYER_SCOUT_PRIVATE_KEY:scout.certo.testnet \
+  BUYER_SCOUT_LIAR_PRIVATE_KEY:scout-liar.certo.testnet; do
   echo "${pair%%:*}=$(node -p "require(process.env.HOME + '/.near-credentials/testnet/${pair#*:}.json').private_key")" >> .env
 done
 chmod 600 .env
 ```
 
-`MAKEGOOD_OWNER_PRIVATE_KEY` is optional; it is used only when the juror keys on an existing
+`CERTO_OWNER_PRIVATE_KEY` is optional; it is used only when the juror keys on an existing
 contract must change (`set_jurors`). Keep it set if you plan to switch from synthetic to real keys.
-If you changed account names in step 2, edit the `*_ACCOUNT` / `MAKEGOOD_*` lines too.
+If you changed account names in step 2, edit the `*_ACCOUNT` / `CERTO_*` lines too.
 
 ## Step 4: dry run (sends nothing)
 
@@ -120,10 +120,10 @@ no .env file at the repository root; settings from the environment only (cp .env
 dry run: no transactions are sent; read-only view_account queries to https://rpc.testnet.fastnear.com
 role                       account                              key                 on chain
 -------------------------  -----------------------------------  ------------------  ---------------------------------------------------
-MAKEGOOD_OWNER             makegood.testnet                     not set (optional)  UNKNOWN_ACCOUNT (create it, docs/TESTNET.md step 2)
-MAKEGOOD_CONTRACT          v1.makegood.testnet                  MISSING             UNKNOWN_ACCOUNT (create it, docs/TESTNET.md step 2)
+CERTO_OWNER             certo.testnet                     not set (optional)  UNKNOWN_ACCOUNT (create it, docs/TESTNET.md step 2)
+CERTO_CONTRACT          v1.certo.testnet                  MISSING             UNKNOWN_ACCOUNT (create it, docs/TESTNET.md step 2)
 …
-CONFIG: MAKEGOOD_CONTRACT_PRIVATE_KEY is empty (key of v1.makegood.testnet, makegood contract (code storage ~3.5 NEAR))
+CONFIG: CERTO_CONTRACT_PRIVATE_KEY is empty (key of v1.certo.testnet, certo contract (code storage ~3.5 NEAR))
 …
 RPC https://rpc.testnet.fastnear.com: reachable
 DRY RUN NOT READY: 7 configuration problem(s), 8 account problem(s) (see docs/TESTNET.md)
@@ -142,10 +142,10 @@ contract must match the panel answers the run submits. Three choices:
 
 The order that gives the strongest README claim: key in `.env` → `make probe` → `make killtest`
 → `make record` → `PANEL_MODE=live make testnet-demo`. Juror keys can be changed later on the
-same contract with `MAKEGOOD_OWNER_PRIVATE_KEY` set (the run calls `set_jurors`; epoch + 1).
+same contract with `CERTO_OWNER_PRIVATE_KEY` set (the run calls `set_jurors`; epoch + 1).
 `accept_gateway` is fixed at the first deployment: the runner sets it to true for live mode and for
 replays that contain gateway signatures; `scripts/deploy-testnet.ts --accept-gateway` sets it when
-deploying by hand. To change it, deploy to a fresh contract account (`MAKEGOOD_CONTRACT=v2.makegood.testnet`).
+deploying by hand. To change it, deploy to a fresh contract account (`CERTO_CONTRACT=v2.certo.testnet`).
 
 Deploying without the scenes: `npx tsx scripts/deploy-testnet.ts` (real keys) or
 `npx tsx scripts/deploy-testnet.ts --jurors synthetic`; it ends with `DEPLOY OK: …`.
@@ -156,13 +156,13 @@ First the setup, one line per transaction with its explorer link (skipped steps 
 "already deployed" / "registered"):
 
 ```text
-token usdc.makegood.testnet: deploying res/mock_usdc.wasm and calling new
+token usdc.certo.testnet: deploying res/mock_usdc.wasm and calling new
   deploy token: https://testnet.nearblocks.io/txns/<hash>
-contract v1.makegood.testnet: deploying res/makegood.wasm and calling new
+contract v1.certo.testnet: deploying res/certo.wasm and calling new
   deploy contract: https://testnet.nearblocks.io/txns/<hash>
   register_seller chainfacts: https://testnet.nearblocks.io/txns/<hash>
   …
-buyer scout-liar scout-liar.makegood.testnet: 10.000000 mock USDC
+buyer scout-liar scout-liar.certo.testnet: 10.000000 mock USDC
 ```
 
 Then the same numbered transcript as `make demo`, with explorer links in place of short hashes,
@@ -197,10 +197,10 @@ How long a run takes on testnet has not been measured; scene 4 alone waits the 3
 |---|---|
 | `CONFIG: … is empty` / `… must start with "ed25519:"` | Step 3 |
 | `UNKNOWN_ACCOUNT` | Step 2 |
-| `… (LOW: needs ≥ N NEAR)` | send NEAR to that account (`near send-near makegood.testnet <account> 1`) |
+| `… (LOW: needs ≥ N NEAR)` | send NEAR to that account (`near send-near certo.testnet <account> 1`) |
 | `… is not an access key of …` | the key in `.env` belongs to another account |
 | `fixtures/panel holds SYNTHETIC ballots …` | step 5: record real ballots, or `TESTNET_JURORS=synthetic` |
-| `the juror keys on … are not the … set` | set `MAKEGOOD_OWNER_PRIVATE_KEY`, or use a fresh contract account |
+| `the juror keys on … are not the … set` | set `CERTO_OWNER_PRIVATE_KEY`, or use a fresh contract account |
 | `… already holds other code` | the account has another contract; use a fresh account name. The script never upgrades a deployed contract |
 | `… was initialised with another owner/token/resolver` | use a fresh contract account |
 | `… is registered with another receipt key` | the seller's NEAR key changed since registration; use a fresh seller account |

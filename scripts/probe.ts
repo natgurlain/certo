@@ -1,5 +1,5 @@
 // T03 signature probe (DESIGN 2.1, 6.4 K4): one non-streaming call per juror with a
-// body built by @makegood/core, fetch the ed25519 signature, verify offline against
+// body built by @certo/core, fetch the ed25519 signature, verify offline against
 // fixtures/jurors.json, and print the K4 table. Verified ballots are saved as the first
 // fixtures/panel/*.json recordings.
 //
@@ -8,7 +8,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { JURORS, buildPanelRequestFor, sha256Hex } from "@makegood/core";
+import { JURORS, buildPanelRequestFor, sha256Hex } from "@certo/core";
 import { apiKeyOrExit, askJuror, httpRaw, nearaiBaseUrl } from "./lib/nearai.ts";
 import { fetchAttestations, recheckAttestations } from "./lib/attest.ts";
 import { PANEL_DIR, ballotToRecording, checkRecording, contentShape, parseSignedText, saveRecording } from "./lib/ballots.ts";

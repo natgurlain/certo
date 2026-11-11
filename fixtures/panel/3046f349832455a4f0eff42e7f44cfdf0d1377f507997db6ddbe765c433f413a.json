@@ -5,12 +5,12 @@
   "chat_id": "chatcmpl-synthetic-ee88b091f0f61818e1f78841",
   "signature": {
     "text": "z-ai/glm-5.3-flash:3046f349832455a4f0eff42e7f44cfdf0d1377f507997db6ddbe765c433f413a:19e826a7b30e04be3da5726d2fe111cb1cdf5a63ce335cb84210c7f988ad874d",
-    "signature": "1a85f116e9338c7ee65956122703a7bbb8e0139ce08213d405c8e850d2fbf4dacd1a51047ee7f7f9b41cc40433dc8a53435472f8f8c2cd4d87a8372f8ee5f50a",
-    "signing_address": "e01c0ae14e172514d7e5689b2b7afa3e943cd0233d0c5fe1cd9d994b702f2ed4",
+    "signature": "4d3f4bb8845dca2e33dd4107b9d8495c26f54876aa1aa680c2f50ab51b71b75fe5aeadad817f4a80d78b09f2332e3efdde291c1427b839318a59dd11188a2f03",
+    "signing_address": "fbdb503c515c0d1848fb737942ef69eae0fcec1e23e3be125b12e43750217106",
     "signing_algo": "ed25519",
     "signature_kind": "provider_tee"
   },
   "latency_ms": 0,
-  "recorded_at": "2026-11-10T23:57:47.024Z",
+  "recorded_at": "2026-11-11T14:05:47.716Z",
   "synthetic": true
 }

@@ -4,7 +4,7 @@
 // end to end without a key; its votes come from an oracle of the case labels and say
 // nothing about real model behaviour.
 import { createServer, type IncomingMessage, type Server } from "node:http";
-import { JURORS, ed25519FromLabel, ed25519Sign, nearaiSignatureText, toHex, type Ed25519Key } from "@makegood/core";
+import { JURORS, ed25519FromLabel, ed25519Sign, nearaiSignatureText, toHex, type Ed25519Key } from "@certo/core";
 import { sha256Hex } from "./util.ts";
 
 export type MockProfile = "good" | "bad";

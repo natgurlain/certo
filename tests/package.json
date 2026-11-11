@@ -1,5 +1,5 @@
 {
-  "name": "@makegood/tests",
+  "name": "@certo/tests",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,10 +8,10 @@
     "guards": "tsx guards/run.ts"
   },
   "dependencies": {
-    "@makegood/core": "0.1.0",
-    "@makegood/buyer": "0.1.0",
-    "@makegood/seller": "0.1.0",
-    "@makegood/panel": "0.1.0",
-    "@makegood/demo": "0.1.0"
+    "@certo/core": "0.1.0",
+    "@certo/buyer": "0.1.0",
+    "@certo/seller": "0.1.0",
+    "@certo/panel": "0.1.0",
+    "@certo/demo": "0.1.0"
   }
 }

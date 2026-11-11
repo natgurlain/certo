@@ -1,27 +1,27 @@
 {
   "synthetic": true,
   "note": "TEST keys for replay-synthetic mode. Seed = sha256(\"<seed>:juror:<i>\") (gateway: \"<seed>:gateway\"); anyone can sign with them. They are not NEAR AI keys and have no attestation (attestation_sha256 is all zeros).",
-  "seed": "makegood-synthetic-jurors-v1",
+  "seed": "certo-synthetic-jurors-v1",
   "gateway": {
-    "public_key": "7f57150f11c64a41f400643f9ddca081574c6425a3ce86075a49a1279a9edeb5"
+    "public_key": "aeb0b2a32a401e351c02f9f63375be7cc3aad6cf15b5c2555c5a9b2d4bb0d168"
   },
   "jurors": [
     {
       "index": 0,
       "model": "Qwen/Qwen3.8-27B",
-      "public_key": "bdd290090ad645baeadb9ab887cec358602b3d14b781ac67a908e381beec80c9",
+      "public_key": "9b92c70087343b29a63efad5191d957a87d4009e8ebe9ce9181aeaf928c2544d",
       "attestation_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
     },
     {
       "index": 1,
       "model": "z-ai/glm-5.3-flash",
-      "public_key": "e01c0ae14e172514d7e5689b2b7afa3e943cd0233d0c5fe1cd9d994b702f2ed4",
+      "public_key": "fbdb503c515c0d1848fb737942ef69eae0fcec1e23e3be125b12e43750217106",
       "attestation_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
     },
     {
       "index": 2,
       "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
-      "public_key": "62a6e229845e6496cb016b715e8334f487e384260d19303bfd66e2d14e8b9599",
+      "public_key": "b76497e5ea74ee2dffd63c755ca69a95e17577de7d73b10a3d186f4744ba0c49",
       "attestation_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
     }
   ]

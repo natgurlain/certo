@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { chainFromEnv } from '@makegood/core';
+import { chainFromEnv } from '@certo/core';
 import { createPanelApp } from './app.js';
 import { jurorsFromEnv } from './jurors.js';
 import { PanelService } from './service.js';

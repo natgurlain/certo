@@ -9,7 +9,7 @@
 //   npx tsx scripts/verify-recorded.ts [--root <fixtures dir>] [--verbose]
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { recordingFileName, type PanelRecording } from "@makegood/core";
+import { recordingFileName, type PanelRecording } from "@certo/core";
 import { recheckAttestations, resolveReportPath } from "./lib/attest.ts";
 import { checkRecording, listRecordings } from "./lib/ballots.ts";
 import type { JurorsFile } from "./lib/jurors-file.ts";

@@ -1,6 +1,6 @@
 import { callIdOf, sha256Hex } from './encode.js';
 import { feeFor, stakeFor } from './amount.js';
-import type { MakegoodChain, TxResult } from './chain.js';
+import type { CertoChain, TxResult } from './chain.js';
 import type { CallView, ContractEvent, SellerView, TermsView } from './types.js';
 import { EVENT_STANDARD, EVENT_VERSION } from './brand.js';
 
@@ -9,8 +9,8 @@ import { EVENT_STANDARD, EVENT_VERSION } from './brand.js';
  * It models just enough state (sellers, terms, calls, statuses) to drive the
  * protocol; it is NOT a reference implementation of the contract.
  */
-export class FakeChain implements MakegoodChain {
-  contractId = 'makegood.test.near';
+export class FakeChain implements CertoChain {
+  contractId = 'certo.test.near';
   tokenId = 'usdc.test.near';
   network = 'near:sandbox';
   sellers = new Map<string, SellerView>();

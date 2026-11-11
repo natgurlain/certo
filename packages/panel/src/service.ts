@@ -1,10 +1,10 @@
 import {
   JURORS, majority, offerCommit, parseVote, recordingResponseBody, sha256Hex, toBase64, toContractBallot, voteToSide,
-  buildPanelRequestFor, type ContractBallot, type MakegoodChain, type PanelRecording, type Side, type TxResult, type Vote,
-} from '@makegood/core';
+  buildPanelRequestFor, type ContractBallot, type CertoChain, type PanelRecording, type Side, type TxResult, type Vote,
+} from '@certo/core';
 import { assertBallot, type JurorSource } from './jurors.js';
 
-export type PanelChain = Pick<MakegoodChain, 'getCall' | 'getTerms' | 'getJurors' | 'buildPanelRequest' | 'resolve'>;
+export type PanelChain = Pick<CertoChain, 'getCall' | 'getTerms' | 'getJurors' | 'buildPanelRequest' | 'resolve'>;
 
 /** `POST /cases` body (section 4.3). */
 export interface CaseRequest {

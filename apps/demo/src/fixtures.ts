@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   JURORS, buildPanelRequestFor, recordingFileName, syntheticJurorKey, toHex, SYNTHETIC_SEED, type PanelRecording,
-} from '@makegood/core';
+} from '@certo/core';
 import { repoFile } from './sandbox.js';
 
 export type DemoSeller = 'chainfacts' | 'cheapfacts';

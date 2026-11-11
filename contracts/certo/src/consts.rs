@@ -2,9 +2,9 @@
 //! rename is one edit (plus a rebuild).
 
 /// Prefix of the seller receipt text (DESIGN 4.3).
-pub const RECEIPT_PREFIX: &str = "makegood-receipt:v1";
+pub const RECEIPT_PREFIX: &str = "certo-receipt:v1";
 /// NEP-297 `standard` field of every event.
-pub const EVENT_STANDARD: &str = "makegood";
+pub const EVENT_STANDARD: &str = "certo";
 /// NEP-297 `version` field of every event.
 pub const EVENT_VERSION: &str = "1.0.0";
 

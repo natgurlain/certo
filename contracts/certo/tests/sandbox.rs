@@ -485,7 +485,7 @@ fn decode64or_hex(s: &str, len: usize) -> Vec<u8> {
 /// recorded signing key. Passes vacuously, and says so, while no recording exists.
 #[tokio::test]
 async fn t07_recorded_nearai_signatures_verify_on_chain() -> anyhow::Result<()> {
-    let dir = std::env::var("MAKEGOOD_PANEL_DIR")
+    let dir = std::env::var("CERTO_PANEL_DIR")
         .unwrap_or_else(|_| format!("{}/../../fixtures/panel", env!("CARGO_MANIFEST_DIR")));
     let mut files: Vec<_> = match std::fs::read_dir(&dir) {
         Ok(rd) => rd.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "json")).collect(),

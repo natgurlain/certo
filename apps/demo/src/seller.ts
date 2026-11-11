@@ -1,20 +1,20 @@
 /**
- * Demo seller: an Express app behind `protect()` from `@makegood/seller` that
+ * Demo seller: an Express app behind `protect()` from `@certo/seller` that
  * serves fixed fixture bodies byte for byte (so the panel prompts, and hence
  * the recordings, are identical in every run), plus its answer bot.
  */
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import express from 'express';
-import { createAnswerBot, protect, type ProtectMiddleware } from '@makegood/seller';
-import type { Ed25519Key, MakegoodChain } from '@makegood/core';
+import { createAnswerBot, protect, type ProtectMiddleware } from '@certo/seller';
+import type { Ed25519Key, CertoChain } from '@certo/core';
 
 export type Behaviour = 'fixture' | 'error503';
 
 export interface DemoSellerOptions {
   id: string;
   /** Signing chain client of this seller (views for the middleware; `answer`/`cure` for the bot). */
-  chain: MakegoodChain;
+  chain: CertoChain;
   receiptKey: Ed25519Key;
   termsId: string;
   price: string;

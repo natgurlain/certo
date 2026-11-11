@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ed25519FromLabel, offerCommit, toHex } from '@makegood/core';
-import { FakeChain } from '@makegood/core/testing';
-import { protect } from '@makegood/seller';
-import { MakegoodClient, MakegoodError, runCli, simplePolicy, type CallResult } from '../src/index.js';
+import { ed25519FromLabel, offerCommit, toHex } from '@certo/core';
+import { FakeChain } from '@certo/core/testing';
+import { protect } from '@certo/seller';
+import { CertoClient, CertoError, runCli, simplePolicy, type CallResult } from '../src/index.js';
 
 const SELLER = 'cheapfacts.test.near';
 const BUYER = 'scout.test.near';
@@ -47,9 +47,9 @@ beforeAll(async () => {
 });
 afterAll(() => { server.closeAllConnections(); server.close(); });
 
-const client = () => new MakegoodClient({ chain: buyerChain, deliveryTimeoutMs: 300 });
+const client = () => new CertoClient({ chain: buyerChain, deliveryTimeoutMs: 300 });
 
-describe('MakegoodClient.call', () => {
+describe('CertoClient.call', () => {
   it('clean call end to end', async () => {
     const c = client();
     const r = await c.call(`${base}/good?token=NEAR&top=5`);
@@ -67,7 +67,7 @@ describe('MakegoodClient.call', () => {
     tamper = true;
     try {
       const err = await client().call(`${base}/good?token=NEAR`).catch((e) => e);
-      expect(err).toBeInstanceOf(MakegoodError);
+      expect(err).toBeInstanceOf(CertoError);
       expect(err.code).toBe('RECEIPT_MISMATCH');
       expect(err.callId).toMatch(new RegExp(`^${SELLER}/[0-9a-f]{32}$`));
     } finally {
@@ -86,7 +86,7 @@ describe('MakegoodClient.call', () => {
     expect((await client().call(`${base}/good`, { maxPrice: '399999' }).catch((e) => e)).code).toBe('PRICE_TOO_HIGH');
     expect((await client().call(`${base}/poor`).catch((e) => e)).code).toBe('WOULD_NOT_FIT');
     const other = Object.assign(chain.as(BUYER), { contractId: 'evil.near' });
-    expect((await new MakegoodClient({ chain: other }).call(`${base}/good`).catch((e) => e)).code).toBe('WRONG_CONTRACT');
+    expect((await new CertoClient({ chain: other }).call(`${base}/good`).catch((e) => e)).code).toBe('WRONG_CONTRACT');
     expect(chain.log.filter((l) => l.method === 'pay').length).toBe(paysBefore);
   });
 
@@ -94,7 +94,7 @@ describe('MakegoodClient.call', () => {
     const bouncing = Object.assign(chain.as(BUYER), {
       pay: async () => ({ txHash: 't', events: [], logs: [], failures: ['Smart contract panicked: E_EXPOSURE'] }),
     });
-    const err = await new MakegoodClient({ chain: bouncing }).call(`${base}/good`).catch((e) => e);
+    const err = await new CertoClient({ chain: bouncing }).call(`${base}/good`).catch((e) => e);
     expect(err.code).toBe('PAY_FAILED');
     expect(err.contractCode).toBe('E_EXPOSURE');
   });

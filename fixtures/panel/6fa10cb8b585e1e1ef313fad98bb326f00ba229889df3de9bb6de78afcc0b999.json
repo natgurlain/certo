@@ -5,12 +5,12 @@
   "chat_id": "chatcmpl-synthetic-f4d8cd04fbcdd53d43fa43a8",
   "signature": {
     "text": "Qwen/Qwen3.8-27B:6fa10cb8b585e1e1ef313fad98bb326f00ba229889df3de9bb6de78afcc0b999:fae146655ca93e0b2bfd3fbd57f79a4d05a8c565ea324e3171fe764de7dd167a",
-    "signature": "b0046e26a31dcd6c58122d279780db1c810ef13323ca61ed11f8fdf2e3ee030f57db1b08e9be89197336d8785554a92bff5a4063524fa3c0b3787859bbed680b",
-    "signing_address": "bdd290090ad645baeadb9ab887cec358602b3d14b781ac67a908e381beec80c9",
+    "signature": "7e3c3cdbb59d452cfc3147bccb790b58a225e60975e859d3189075a11f1f945ea9a172df76514af55c5a93da39315c4f38605c8ab7746514a3c94f25adbd6d09",
+    "signing_address": "9b92c70087343b29a63efad5191d957a87d4009e8ebe9ce9181aeaf928c2544d",
     "signing_algo": "ed25519",
     "signature_kind": "provider_tee"
   },
   "latency_ms": 0,
-  "recorded_at": "2026-11-10T23:57:47.020Z",
+  "recorded_at": "2026-11-11T14:05:47.707Z",
   "synthetic": true
 }

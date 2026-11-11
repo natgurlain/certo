@@ -10,7 +10,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { JURORS, SYSTEM_PROMPT } from "@makegood/core";
+import { JURORS, SYSTEM_PROMPT } from "@certo/core";
 import { checkCase, checkInjection, fillLetter, loadCases, loadInjections, loadTerms, type InjectionCase, type KillCase } from "./lib/cases.ts";
 import { apiKeyOrExit, listModels } from "./lib/nearai.ts";
 import { fetchAttestations, recheckAttestations } from "./lib/attest.ts";

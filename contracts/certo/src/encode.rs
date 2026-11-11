@@ -199,7 +199,7 @@ mod tests {
         let t = receipt_text("c.near", "s.near/00", "b.near", 400_000, "t-1", &[0xab; 32], &[0x01; 32], 200, 17);
         assert_eq!(
             t,
-            format!("makegood-receipt:v1|c.near|s.near/00|b.near|400000|t-1|{}|{}|200|17", "ab".repeat(32), "01".repeat(32))
+            format!("certo-receipt:v1|c.near|s.near/00|b.near|400000|t-1|{}|{}|200|17", "ab".repeat(32), "01".repeat(32))
         );
     }
 

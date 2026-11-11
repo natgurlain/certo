@@ -1,14 +1,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { formatUsdc, MCP_SERVER_NAME, PRODUCT_NAME, TOOL_PREFIX } from '@makegood/core';
-import { MakegoodClient, MakegoodError, simplePolicy } from '@makegood/buyer';
+import { formatUsdc, MCP_SERVER_NAME, PRODUCT_NAME, TOOL_PREFIX } from '@certo/core';
+import { CertoClient, CertoError, simplePolicy } from '@certo/buyer';
 
 export const TOOL_CALL = `${TOOL_PREFIX}_call`;
 export const TOOL_DISPUTE = `${TOOL_PREFIX}_dispute`;
 export const TOOL_STATUS = `${TOOL_PREFIX}_status`;
 
 export interface McpOptions {
-  client: MakegoodClient;
+  client: CertoClient;
   /** Panel service URL used by `dispute` when `submit_to_panel` is set. */
   panelUrl?: string;
 }
@@ -16,7 +16,7 @@ export interface McpOptions {
 const text = (obj: unknown, isError = false) => ({ content: [{ type: 'text' as const, text: JSON.stringify(obj, null, 2) }], isError });
 
 function errorResult(e: unknown) {
-  if (e instanceof MakegoodError) return text({ error: e.code, message: e.message, call_id: e.callId, contract_code: e.contractCode }, true);
+  if (e instanceof CertoError) return text({ error: e.code, message: e.message, call_id: e.callId, contract_code: e.contractCode }, true);
   return text({ error: (e as Error).message, contract_code: (e as { contractCode?: string }).contractCode }, true);
 }
 

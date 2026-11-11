@@ -19,7 +19,7 @@ import { JsonRpcProvider } from '@near-js/providers';
 import { KeyPairSigner } from '@near-js/signers';
 import { actionCreators } from '@near-js/transactions';
 import { GenesisAccount, Sandbox } from 'near-sandbox';
-import { NearMakegoodChain, ONE_NEAR, signAndSend, TGAS, type NearChainOptions } from '@makegood/core';
+import { NearCertoChain, ONE_NEAR, signAndSend, TGAS, type NearChainOptions } from '@certo/core';
 
 export const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 export const repoFile = (rel: string) => fileURLToPath(new URL(rel, new URL('../../../', import.meta.url)));
@@ -47,9 +47,9 @@ function checkGlibc(): void {
 }
 
 export const WASM = {
-  makegood: 'res/makegood.wasm',
+  certo: 'res/certo.wasm',
   usdc: 'res/mock_usdc.wasm',
-  guard: (n: number) => `res/guards/makegood_no_g${n}.wasm`,
+  guard: (n: number) => `res/guards/certo_no_g${n}.wasm`,
 };
 
 export interface Keyed {
@@ -142,10 +142,10 @@ export class LocalChain {
     }
   }
 
-  /** A `MakegoodChain` client signed by `accountId` (any subclass, e.g. the demo's instrumented one). */
-  client<C extends NearMakegoodChain = NearMakegoodChain>(
+  /** A `CertoChain` client signed by `accountId` (any subclass, e.g. the demo's instrumented one). */
+  client<C extends NearCertoChain = NearCertoChain>(
     contractId: string, tokenId: string, accountId?: string,
-    make: (o: NearChainOptions) => C = (o) => new NearMakegoodChain(o) as C,
+    make: (o: NearChainOptions) => C = (o) => new NearCertoChain(o) as C,
   ): C {
     return make({
       rpcUrl: this.rpcUrl, contractId, tokenId, network: 'near:sandbox',

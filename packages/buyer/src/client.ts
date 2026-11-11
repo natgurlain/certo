@@ -1,12 +1,12 @@
 import {
   callIdOf, decodeHeader, encodeHeader, errorCode, findOurRequirement, hasEvent, HDR_PAYMENT_REQUIRED, HDR_PAYMENT_RESPONSE,
   HDR_PAYMENT_SIGNATURE, newSalt, offerCommit, receiptText, requestCanon, sha256Hex, systemClock, verifyBase64,
-  type CallView, type Clock, type MakegoodChain, type PaymentRequired, type PaymentRequirement, type PaymentResponse,
+  type CallView, type Clock, type CertoChain, type PaymentRequired, type PaymentRequirement, type PaymentResponse,
   type PaymentSignature, type Receipt, type TxResult,
-} from '@makegood/core';
+} from '@certo/core';
 
 export type BuyerChain = Pick<
-  MakegoodChain,
+  CertoChain,
   'contractId' | 'tokenId' | 'accountId' | 'getSeller' | 'getTerms' | 'getCall' | 'getBuyer' | 'quote' | 'pay' | 'claimError' |
   'claimRule' | 'disputeNonDelivery' | 'disputeContent' | 'resolveDefault'
 >;
@@ -16,10 +16,10 @@ export type FailureCode =
   | 'PAY_FAILED' | 'TIMEOUT' | 'NO_RECEIPT' | 'RECEIPT_MISMATCH' | 'BAD_RECEIPT_SIG' | 'NO_STATE';
 
 /** Thrown for every refusal. After payment, `callId` is set so the buyer can claim non-delivery. */
-export class MakegoodError extends Error {
+export class CertoError extends Error {
   constructor(readonly code: FailureCode, message: string, readonly callId?: string, readonly contractCode?: string) {
     super(message);
-    this.name = 'MakegoodError';
+    this.name = 'CertoError';
   }
 }
 
@@ -75,7 +75,7 @@ function headersOf(r: Response): Record<string, string> {
 }
 
 /** Buyer SDK (DESIGN.md 4.3, T10). */
-export class MakegoodClient {
+export class CertoClient {
   readonly chain: BuyerChain;
   private readonly f: typeof fetch;
   private readonly clock: Clock;
@@ -104,12 +104,12 @@ export class MakegoodClient {
     const body = opts.body ?? '';
     const init: RequestInit = { method, headers: { ...opts.headers }, body: method === 'GET' || method === 'HEAD' ? undefined : body };
     const first = await this.f(url, init);
-    if (first.status !== 402) throw new MakegoodError('NOT_PROTECTED', `expected 402, got ${first.status}`);
+    if (first.status !== 402) throw new CertoError('NOT_PROTECTED', `expected 402, got ${first.status}`);
     const hdr = first.headers.get(HDR_PAYMENT_REQUIRED);
     await first.arrayBuffer().catch(() => undefined);
-    if (!hdr) throw new MakegoodError('NOT_PROTECTED', '402 without PAYMENT-REQUIRED');
+    if (!hdr) throw new CertoError('NOT_PROTECTED', '402 without PAYMENT-REQUIRED');
     const req = findOurRequirement(decodeHeader<PaymentRequired>(hdr));
-    if (!req) throw new MakegoodError('NO_SCHEME', 'seller does not offer the bonded scheme');
+    if (!req) throw new CertoError('NO_SCHEME', 'seller does not offer the bonded scheme');
     await this.checkQuote(req, opts.maxPrice ?? this.maxPrice);
 
     const u = new URL(url);
@@ -120,7 +120,7 @@ export class MakegoodClient {
     const tx = await this.chain.pay({ seller, quote_id: quoteId, terms_id: termsId, request_hash: requestHash, amount: req.amount });
     if (!hasEvent(tx, 'call_paid')) {
       const msg = tx.failures.join('; ') || 'no call_paid event';
-      throw new MakegoodError('PAY_FAILED', `payment bounced: ${msg}`, undefined, errorCode(msg));
+      throw new CertoError('PAY_FAILED', `payment bounced: ${msg}`, undefined, errorCode(msg));
     }
 
     const ps: PaymentSignature = { x402Version: 2, accepted: req, payload: { callId, buyer: this.buyer, txHash: tx.txHash } };
@@ -132,28 +132,28 @@ export class MakegoodClient {
       });
       bytes = new Uint8Array(await resp.arrayBuffer());
     } catch (e) {
-      throw new MakegoodError('TIMEOUT', `no delivery within ${this.timeoutMs} ms: ${(e as Error).message}`, callId);
+      throw new CertoError('TIMEOUT', `no delivery within ${this.timeoutMs} ms: ${(e as Error).message}`, callId);
     }
     const prh = resp.headers.get(HDR_PAYMENT_RESPONSE);
-    if (!prh) throw new MakegoodError('NO_RECEIPT', `response ${resp.status} without PAYMENT-RESPONSE`, callId);
+    if (!prh) throw new CertoError('NO_RECEIPT', `response ${resp.status} without PAYMENT-RESPONSE`, callId);
     let receipt: Receipt;
     try {
       receipt = decodeHeader<PaymentResponse>(prh).receipt;
     } catch {
-      throw new MakegoodError('NO_RECEIPT', 'malformed PAYMENT-RESPONSE', callId);
+      throw new CertoError('NO_RECEIPT', 'malformed PAYMENT-RESPONSE', callId);
     }
-    if (!receipt || receipt.callId !== callId) throw new MakegoodError('NO_RECEIPT', 'receipt is for another call', callId);
+    if (!receipt || receipt.callId !== callId) throw new CertoError('NO_RECEIPT', 'receipt is for another call', callId);
     if (receipt.responseHash !== sha256Hex(bytes)) {
-      throw new MakegoodError('RECEIPT_MISMATCH', 'response body hash differs from the receipt; refusing the response', callId);
+      throw new CertoError('RECEIPT_MISMATCH', 'response body hash differs from the receipt; refusing the response', callId);
     }
-    if (receipt.statusCode !== resp.status) throw new MakegoodError('RECEIPT_MISMATCH', 'receipt status differs from the HTTP status', callId);
+    if (receipt.statusCode !== resp.status) throw new CertoError('RECEIPT_MISMATCH', 'receipt status differs from the HTTP status', callId);
     const sellerView = await this.chain.getSeller(seller);
     const text = receiptText({
       contract: this.chain.contractId, callId, buyer: this.buyer, price: req.amount, termsId, requestHash,
       responseHash: receipt.responseHash, statusCode: receipt.statusCode, servedAtMs: receipt.servedAtMs,
     });
     if (!sellerView || !verifyBase64(text, receipt.sig, sellerView.receipt_pubkey)) {
-      throw new MakegoodError('BAD_RECEIPT_SIG', 'receipt signature does not verify under the seller key on chain', callId);
+      throw new CertoError('BAD_RECEIPT_SIG', 'receipt signature does not verify under the seller key on chain', callId);
     }
     const result: CallResult = {
       callId, seller, termsId, price: req.amount, payTx: tx.txHash, status: resp.status,
@@ -165,22 +165,22 @@ export class MakegoodClient {
 
   private async checkQuote(req: PaymentRequirement, maxPrice?: string): Promise<void> {
     if (req.payTo !== this.chain.contractId || req.asset !== this.chain.tokenId) {
-      throw new MakegoodError('WRONG_CONTRACT', `quote pays ${req.payTo}/${req.asset}, expected ${this.chain.contractId}/${this.chain.tokenId}`);
+      throw new CertoError('WRONG_CONTRACT', `quote pays ${req.payTo}/${req.asset}, expected ${this.chain.contractId}/${this.chain.tokenId}`);
     }
     if (maxPrice !== undefined && BigInt(req.amount) > BigInt(maxPrice)) {
-      throw new MakegoodError('PRICE_TOO_HIGH', `price ${req.amount} > max ${maxPrice}`);
+      throw new CertoError('PRICE_TOO_HIGH', `price ${req.amount} > max ${maxPrice}`);
     }
     const [s, t, q] = await Promise.all([
       this.chain.getSeller(req.extra.seller), this.chain.getTerms(req.extra.seller, req.extra.termsId), this.chain.quote(req.extra.seller, req.amount),
     ]);
-    if (!s) throw new MakegoodError('SELLER_UNKNOWN', `seller ${req.extra.seller} is not registered`);
-    if (!t) throw new MakegoodError('TERMS_UNKNOWN', `terms ${req.extra.termsId} not found`);
-    if (!q.would_fit) throw new MakegoodError('WOULD_NOT_FIT', 'seller bond has no free capacity for this call');
+    if (!s) throw new CertoError('SELLER_UNKNOWN', `seller ${req.extra.seller} is not registered`);
+    if (!t) throw new CertoError('TERMS_UNKNOWN', `terms ${req.extra.termsId} not found`);
+    if (!q.would_fit) throw new CertoError('WOULD_NOT_FIT', 'seller bond has no free capacity for this call');
   }
 
   private result(callId: string | CallResult): CallResult {
     const r = typeof callId === 'string' ? this.calls.get(callId) : callId;
-    if (!r) throw new MakegoodError('NO_STATE', `no stored result for ${String(callId)}`);
+    if (!r) throw new CertoError('NO_STATE', `no stored result for ${String(callId)}`);
     return r;
   }
 
@@ -227,7 +227,7 @@ export class MakegoodClient {
   /** Non-delivery claim (no response in time, or no valid receipt). */
   async claimNonDelivery(callId: string): Promise<TxResult> {
     const call = await this.chain.getCall(callId);
-    if (!call) throw new MakegoodError('NO_STATE', `call ${callId} not on chain`);
+    if (!call) throw new CertoError('NO_STATE', `call ${callId} not on chain`);
     const stake = await this.stakeFor(call.seller, call.price);
     const tx = await this.chain.disputeNonDelivery({ call_id: callId, stake });
     requireEvent(tx, 'dispute_opened', 'non-delivery claim');
@@ -255,7 +255,7 @@ export class MakegoodClient {
   async submitToPanel(panelUrl: string, callId: string): Promise<unknown> {
     const r = this.result(callId);
     const d = this.disputes.get(callId);
-    if (!d) throw new MakegoodError('NO_STATE', `no dispute stored for ${callId}`);
+    if (!d) throw new CertoError('NO_STATE', `no dispute stored for ${callId}`);
     const res = await this.f(new URL('/cases', panelUrl), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ call_id: callId, buyer_offer_bps: d.offerBps, salt: d.salt, request_canon: r.requestCanon, response_body: r.body }),

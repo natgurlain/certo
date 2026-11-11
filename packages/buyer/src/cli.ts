@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { chainFromEnv, CLI_NAME, formatUsdc, fromBase64, toBase64, type MakegoodChain } from '@makegood/core';
-import { MakegoodClient, MakegoodError, type BuyerChain, type CallResult, type DisputeRecord } from './client.js';
+import { chainFromEnv, CLI_NAME, formatUsdc, fromBase64, toBase64, type CertoChain } from '@certo/core';
+import { CertoClient, CertoError, type BuyerChain, type CallResult, type DisputeRecord } from './client.js';
 import { simplePolicy } from './policy.js';
 
 const USAGE = `usage: ${CLI_NAME} <command> [args]
@@ -15,7 +15,7 @@ const USAGE = `usage: ${CLI_NAME} <command> [args]
   non-delivery <call_id>                 non-delivery claim
   resolve-default <call_id>              settle after the seller's clock ran out
   status <call_id>                       on-chain call record
-env: NEAR_RPC_URL, MAKEGOOD_CONTRACT, MAKEGOOD_TOKEN, BUYER_ACCOUNT, BUYER_PRIVATE_KEY, MAKEGOOD_STATE_DIR`;
+env: NEAR_RPC_URL, CERTO_CONTRACT, CERTO_TOKEN, BUYER_ACCOUNT, BUYER_PRIVATE_KEY, CERTO_STATE_DIR`;
 
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`);
@@ -34,7 +34,7 @@ export interface CliDeps {
 /** Runs one CLI command; state (results and sealed offers) persists as JSON files in `stateDir`. */
 export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
   const out = deps.out ?? ((l: string) => console.log(l));
-  const client = new MakegoodClient({ chain: deps.chain, fetch: deps.fetch });
+  const client = new CertoClient({ chain: deps.chain, fetch: deps.fetch });
   mkdirSync(deps.stateDir, { recursive: true });
   const file = (id: string) => join(deps.stateDir, `${id.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
   const load = (id: string): Saved => { try { return JSON.parse(readFileSync(file(id), 'utf8')) as Saved; } catch { return {}; } };
@@ -106,15 +106,15 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
         return cmd ? 2 : 0;
     }
   } catch (e) {
-    const code = e instanceof MakegoodError ? ` [${e.code}${e.callId ? ` call ${e.callId}` : ''}]` : '';
+    const code = e instanceof CertoError ? ` [${e.code}${e.callId ? ` call ${e.callId}` : ''}]` : '';
     out(`error${code}: ${(e as Error).message}`);
     return 1;
   }
 }
 
-/** Entry point used by `bin/makegood.js`: chain from env. */
+/** Entry point used by `bin/certo.js`: chain from env. */
 export async function main(argv = process.argv.slice(2), env = process.env): Promise<number> {
-  let chain: MakegoodChain | undefined;
+  let chain: CertoChain | undefined;
   const needsChain = argv[0] && argv[0] !== 'help';
   if (needsChain) {
     const accountId = env.BUYER_ACCOUNT;
@@ -122,7 +122,7 @@ export async function main(argv = process.argv.slice(2), env = process.env): Pro
     chain = chainFromEnv(env, accountId && privateKey ? { accountId, privateKey } : undefined);
   }
   return runCli(argv, {
-    chain: chain as MakegoodChain,
-    stateDir: env.MAKEGOOD_STATE_DIR ?? join(homedir(), `.${CLI_NAME}`, 'calls'),
+    chain: chain as CertoChain,
+    stateDir: env.CERTO_STATE_DIR ?? join(homedir(), `.${CLI_NAME}`, 'calls'),
   });
 }

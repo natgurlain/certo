@@ -1,4 +1,4 @@
-# Makegood — execution-ready design (NEAR Hackathon, bonded chargebacks for agent payments)
+# Certo — execution-ready design (NEAR Hackathon, bonded chargebacks for agent payments)
 
 Written 2026-11-10 (Tue) evening. Build days: Wed 11 – Sat 14 Nov. Deadline 2026-11-14T23:59Z; this plan submits by 18:00Z.
 Desk research only. Nothing was posted, signed, registered, deployed or submitted. Network access used: public docs, read-only `gh`, read-only NEAR RPC `view_account` / `ft_metadata`, and unauthenticated GETs to `cloud-api.near.ai` (model list, attestation reports).
@@ -30,7 +30,8 @@ How checked: `.near` / `.testnet` with RPC `view_account` (`UNKNOWN_ACCOUNT` = f
 
 | Name | `.near` | npm | Verdict |
 |---|---|---|---|
-| **Makegood** | free | free | **Chosen** (by the maintainer, 10 Nov). See below |
+| **Certo** | free | taken (unscoped; we use `@certo/*`) | **Chosen** (by the maintainer, 11 Nov). See below |
+| Makegood | free | free | First choice (10 Nov), replaced by Certo on 11 Nov: the maintainer wanted a positive trust word that can grow into a general payment system |
 | **Backsies** | free | free | **Backup 1.** Playful ("no backsies" = payments are final); memorable, but reads as a joke for a product that asks sellers to lock up a bond, and the idiom is unknown to many non-native readers |
 | **Unpay** | free | free | **Backup 2.** Shortest; a verb. Reads close to "unpaid"; GitHub is full of "Unpaywall" |
 | NoBacksies | free | free | Says the opposite of the product |
@@ -44,19 +45,19 @@ How checked: `.near` / `.testnet` with RPC `view_account` (`UNKNOWN_ACCOUNT` = f
 | Recourse, Umpire, Mulligan, Backstop, Comeback, Standby, SquareUp, Quibble, Gripe, Reckon, Backed, Kept, Recall, Redo, Undo | taken | taken | Out. "Backed" also matches a submission name |
 | Vouchback, Refundbond, Remedy, Pendulum, Gavel, Writ, Vouch | not fully checked / known collisions | | Pendulum is a chain; Writ, Vouch, Bonded, AgentBond, Taskbond, Warrant are existing hackathon entries |
 
-### 1.2 Choice: **Makegood**
+### 1.2 Choice: **Certo**
 
-- **Why.** In business a "make-good" is what a supplier owes you when it did not deliver what you paid for (in advertising: the free re-run owed for an ad that did not run as booked). That is exactly this product: when a paid call breaks its terms, the seller's bond makes it good. It reads as serious, which matters for a product that asks sellers to lock up money, and it works as a noun, a badge and a verb.
-- **Checks (re-run by the main session 2026-11-10 ~23:45 CET).** `makegood.near` free and `makegood.testnet` free (RPC `view_account` on `rpc.*.fastnear.com` returned `UNKNOWN_ACCOUNT`) `[M]`; npm, PyPI and crates.io free (404) `[M]`; no hit in the 476 submission names or the 170 READMEs `[M]`; a web search for "Makegood" with crypto / AI agents / x402 / refund terms found no product of that name `[M]`. GitHub: 30 repositories contain the word, the largest is `piece/makegood` (43★, a PHP test runner, unrelated); GitHub user `makegood` exists with 0 repos. Not checked: X handle, trademark registers, owner of `makegood.com` (it resolves) `[NV]`.
-- **Weakness.** Less playful than Backsies and the advertising sense is jargon to most people. The tagline carries the meaning.
+- **Why.** "Certo" is Italian and Portuguese for "sure" or "of course": a short, positive promise that every paid call is backed. It names the trust, not the payment rail, so it still fits if the product grows from paid API calls into a general payment system. The plain word "refund" describes what happens when a call goes wrong.
+- **Checks (main session, 2026-11-11).** `certo.near` and `certo.testnet` free (RPC `view_account` returned `UNKNOWN_ACCOUNT`) `[M]`; no hit in the 476 submission names or the 170 READMEs `[M]`; a web search for "Certo" with fintech / payments / crypto / AI found only a compliance-software startup for beauty brands, an unrelated field `[M]`. The unscoped npm name `certo` is taken (a WhatsApp Web library), so packages stay under the `@certo/` scope (not checked whether that scope is free on npm) `[M]`. Not checked: X handle, trademark registers, `.com` owner `[NV]`.
+- **Weakness.** English speakers may be unsure how to say it ("CHER-toh" in Italian). Rejected along the way: Recourse (leads with failure), Bona (sounds like "boner"), Surely (reads as "surly"), Duly, Shore (a crypto exchange platform of that name exists).
 
 | Item | Text |
 |---|---|
-| Tagline | **Agents pay instantly. Bad calls get made good.** |
+| Tagline | **Agents pay instantly. Bad calls get refunded.** |
 | 10-word pitch | Instant pay, bonded refunds: chargebacks for AI agents' API calls. |
-| Badge | `Makegood ✓ · bonded 50.00 USDC · refunds for 120 s` (short form: "Makegood-backed") |
-| Verb | "claim a makegood" (open a dispute) |
-| Sub-account pattern | `<seller>.sellers.makegood.testnet`, contract `v1.makegood.testnet` |
+| Badge | `Certo ✓ · bonded 50.00 USDC · refunds for 120 s` (short form: "Certo-backed") |
+| Verb | "claim a refund" (open a dispute) |
+| Sub-account pattern | `<seller>.sellers.certo.testnet`, contract `v1.certo.testnet` |
 
 ---
 
@@ -119,7 +120,7 @@ How checked: `.near` / `.testnet` with RPC `view_account` (`UNKNOWN_ACCOUNT` = f
 | PingPay | Facilitator at `https://pay.pingpay.io/agentpay/x402`; payer pays on an origin chain (e.g. Base USDC), settlement lands on NEAR through Intents (scheme `near-intents`); requires `X-Api-Key` of an organisation with a payee configuration. **NEAR is the destination, not the payment network; mainnet** | https://pingpay.gitbook.io/docs/pingpay-api/agent-pay-facilitator |
 | x402 `exact` on NEAR | Exists: FastNEAR's facilitator settles Circle USDC on `near:testnet` and `near:mainnet` with a NEP-366 delegate action carrying one `ft_transfer`. Credentials are approved by hand per resource server; the transfer goes straight to the payee | https://github.com/fastnear/x402-facilitator (README) `[M]`; used by the hackathon entry Quittance |
 
-**Decision.** Neither facilitator fits in four days: both pay the seller directly with a plain transfer, while Makegood needs the payment to pass through the contract (`ft_transfer_call`) so that exposure is counted, and both need credentials issued by a third party. Makegood therefore speaks **x402 v2 header names and object shapes with its own scheme, `makegood-bonded`, on network `near:testnet`** (or `near:sandbox`), and settles by a direct contract call from the buyer. Cost of doing so: nothing beyond naming. README states: "x402-v2-shaped; a stock x402 client will not understand the scheme; no facilitator". An adapter for `exact` (pay via FastNEAR to a per-seller sub-account that forwards into the contract) is described in the README as future work, not built.
+**Decision.** Neither facilitator fits in four days: both pay the seller directly with a plain transfer, while Certo needs the payment to pass through the contract (`ft_transfer_call`) so that exposure is counted, and both need credentials issued by a third party. Certo therefore speaks **x402 v2 header names and object shapes with its own scheme, `certo-bonded`, on network `near:testnet`** (or `near:sandbox`), and settles by a direct contract call from the buyer. Cost of doing so: nothing beyond naming. README states: "x402-v2-shaped; a stock x402 client will not understand the scheme; no facilitator". An adapter for `exact` (pay via FastNEAR to a per-seller sub-account that forwards into the contract) is described in the README as future work, not built.
 
 ### 2.5 Test token and local chain
 
@@ -130,7 +131,7 @@ How checked: `.near` / `.testnet` with RPC `view_account` (`UNKNOWN_ACCOUNT` = f
 | Local chain | `near-workspaces` 5.0.0 (npm) runs a local NEAR sandbox node; the `near-sandbox` binary is downloaded at `npm install`. Rust crate `near-workspaces` 0.24.0. No keys, no funds | npm and crates.io registries `[M]` |
 | RPC | `rpc.testnet.near.org` and `rpc.mainnet.near.org` now answer with a deprecation warning and HTTP 429 after a few dozen calls | observed today `[M]` |
 
-**Decision.** `make demo` and `make test` run on the local sandbox with a **mock NEP-141 "USDC" (6 decimals, open `mint`)** deployed next to the contract. On testnet, default to the same mock token at `usdc.makegood.testnet` (no faucet clicking); the contract takes the token account as an init argument, so pointing it at Circle's testnet USDC is a config change (STRETCH). All scripts default to `https://rpc.testnet.fastnear.com`. `[NV]`: that the sandbox binary downloads and runs on the screener's machine (Linux x86-64 and macOS arm64 are the supported targets); fallback `make verify`, which needs no chain (section 4.7).
+**Decision.** `make demo` and `make test` run on the local sandbox with a **mock NEP-141 "USDC" (6 decimals, open `mint`)** deployed next to the contract. On testnet, default to the same mock token at `usdc.certo.testnet` (no faucet clicking); the contract takes the token account as an init argument, so pointing it at Circle's testnet USDC is a config change (STRETCH). All scripts default to `https://rpc.testnet.fastnear.com`. `[NV]`: that the sandbox binary downloads and runs on the screener's machine (Linux x86-64 and macOS arm64 are the supported targets); fallback `make verify`, which needs no chain (section 4.7).
 
 ### 2.6 Contract language — **Rust, near-sdk 5.x**
 
@@ -167,7 +168,7 @@ Every item maps to a shot in the 60-second video (V1–V6, section 5.5) or to a 
 | S2 | Sealed buyer offer (commit at dispute, reveal at resolve). Cut line: if not green at 12 Nov 18:00, offers are open and README says so | V3 caption | 2 |
 | S3 | On-chain rule checks for stale data and missing fields (`claim_rule`) | extra shot in V5 | 2 |
 | S4 | `make verify`: offline check of recorded ballots and attestation binding (no chain, no keys) | S-repro fallback | 2 |
-| S5 | MCP server for the buyer side (`makegood_call`, `makegood_dispute`, `makegood_seller`) | S-verify (screeners are MCP clients); `agents` track | 2 |
+| S5 | MCP server for the buyer side (`certo_call`, `certo_dispute`, `certo_seller`) | S-verify (screeners are MCP clients); `agents` track | 2 |
 | S6 | Buyer record: ruling stake doubles after each lost dispute | V4 caption | 1 |
 
 ### STRETCH — only on 13 Nov afternoon, only if everything above is green
@@ -191,15 +192,15 @@ OutLayer; appeals; exposure above 1× bond; mainnet and any real money; Intents 
 ```mermaid
 flowchart LR
   subgraph Buyer side
-    AG[Buyer agent CLI / MCP client] --> SDK[Buyer SDK @makegood/buyer]
-    MCP[MCP server: makegood_call, makegood_dispute, makegood_seller] --> SDK
+    AG[Buyer agent CLI / MCP client] --> SDK[Buyer SDK @certo/buyer]
+    MCP[MCP server: certo_call, certo_dispute, certo_seller] --> SDK
   end
   subgraph Seller side
-    MW[Seller middleware @makegood/seller<br/>holds ed25519 receipt key] --> API[Seller's HTTP handler]
+    MW[Seller middleware @certo/seller<br/>holds ed25519 receipt key] --> API[Seller's HTTP handler]
     SA[Seller answer bot<br/>function-call key: answer, cure]
   end
   subgraph NEAR
-    C[(makegood contract<br/>bonds, calls, disputes,<br/>juror keys, fee tiers)]
+    C[(certo contract<br/>bonds, calls, disputes,<br/>juror keys, fee tiers)]
     T[(NEP-141 test USDC)]
   end
   subgraph Panel
@@ -225,7 +226,7 @@ Components and owners in the repo:
 
 | Component | Language | Trust held |
 |---|---|---|
-| `contracts/makegood` | Rust | Holds bonds and stakes. Owner can only set juror keys, resolver and treasury withdrawal |
+| `contracts/certo` | Rust | Holds bonds and stakes. Owner can only set juror keys, resolver and treasury withdrawal |
 | `contracts/mock-usdc` | Rust | Test token with open `mint` |
 | `packages/core` | TS | Canonical encoders shared by all TS code; mirrored in the contract; golden vectors |
 | `packages/seller` | TS | Receipt signing key (plain ed25519, not a NEAR key). Optional function-call key limited to `answer`, `cure` |
@@ -370,7 +371,7 @@ In both cases `disputed_reserved −= reserve` and the call is deleted.
 
 **Views:** `get_config()`, `get_jurors()`, `get_seller(id)` → `{bond, reserved, disputed_reserved, free_capacity (after simulated sweep), fee_bps, window_ms, lifetime_calls, lifetime_losses, lifetime_volume, receipt_pubkey}`, `get_terms(seller, terms_id)`, `get_call(call_id)`, `get_buyer(id)`, `quote(seller, price)` → `{fee, stake, would_fit: bool}`, `build_panel_request(juror_idx, terms_text, request_canon, response_body, buyer_bps, seller_bps)` → `String` (the exact bytes the contract will hash; used by the panel service and by tests to prove the TS and Rust encoders agree), `receipt_text(call_id, response_hash, status_code, served_at_ms)` → `String`, `claimable_of(id)`.
 
-**Events:** NEP-297, `standard: "makegood"`, `version: "1.0.0"`; names as given above.
+**Events:** NEP-297, `standard: "certo"`, `version: "1.0.0"`; names as given above.
 
 **Errors** (panic messages, stable strings): `E_NOT_REGISTERED`, `E_BOND_LOW`, `E_TERMS`, `E_PRICE_MIN`, `E_DUP_CALL`, `E_EXPOSURE`, `E_WRONG_TOKEN`, `E_NOT_BUYER`, `E_NOT_SELLER`, `E_STATUS` (wrong call state; covers a second dispute), `E_WINDOW_CLOSED`, `E_BAD_RECEIPT_SIG`, `E_HTTP_STATUS`, `E_STAKE_LOW`, `E_NO_PANEL_TERMS`, `E_ANSWER_LATE`, `E_TOO_EARLY`, `E_RESOLVER_ONLY`, `E_COMMIT_MISMATCH`, `E_OFFER_RANGE`, `E_EVIDENCE_HASH`, `E_EVIDENCE_SIZE`, `E_BALLOT_SIG`, `E_NO_MAJORITY`, `E_RULE_NOT_BROKEN`, `E_WITHDRAW_EXPOSED`.
 
@@ -392,16 +393,16 @@ In both cases `disputed_reserved −= reserve` and the call is deleted.
 | `response_hash` | `sha256(response body bytes exactly as sent)`; the middleware sends `Content-Encoding: identity` |
 | `quote_id` | 16 random bytes, lower-case hex |
 | `call_id` | `"<seller account>/<quote_id>"` |
-| Receipt text | `makegood-receipt:v1|<contract account>|<call_id>|<buyer account>|<price as decimal integer>|<terms_id>|<request_hash hex>|<response_hash hex>|<status_code>|<served_at_ms>` |
+| Receipt text | `certo-receipt:v1|<contract account>|<call_id>|<buyer account>|<price as decimal integer>|<terms_id>|<request_hash hex>|<response_hash hex>|<status_code>|<served_at_ms>` |
 | Receipt signature | ed25519 over the UTF-8 bytes of the receipt text, with the seller's `receipt_pubkey`; base64 |
 | Offer commitment | `sha256(u16 little-endian offer_bps ‖ 32 random bytes)` |
 | JSON escaping `esc(s)` | Exactly what `JSON.stringify` does to a string, without the outer quotes: `"`→`\"`, `\`→`\\`, U+0008/000C/000A/000D/0009 → `\b \f \n \r \t`, other code points below U+0020 → `\u00xx` (lower-case hex); everything else unchanged. The Rust mirror is 25 lines; 40 golden vectors include quotes, backslashes, control characters, emoji, U+2028 |
 
 The contract already holds seller, buyer, price, terms and request hash for the call, so a receipt handed to it is just `(response_hash, status_code, served_at_ms, sig)`; it rebuilds the text and checks the signature. A seller cannot deny a receipt, and a buyer cannot invent one.
 
-#### Happy path (x402-v2-shaped headers, scheme `makegood-bonded`)
+#### Happy path (x402-v2-shaped headers, scheme `certo-bonded`)
 
-1. `GET /v1/holders?token=NEAR&top=5` → `402` with header `PAYMENT-REQUIRED: base64({"x402Version":2,"resource":{"url":…},"accepts":[{"scheme":"makegood-bonded","network":"near:testnet","amount":"400000","asset":"<token account>","payTo":"<contract account>","maxTimeoutSeconds":60,"extra":{"seller":"chainfacts.sellers.makegood.testnet","quoteId":"<32 hex>","termsId":"holders-v1","windowMs":120000,"feeBps":100}}]})`.
+1. `GET /v1/holders?token=NEAR&top=5` → `402` with header `PAYMENT-REQUIRED: base64({"x402Version":2,"resource":{"url":…},"accepts":[{"scheme":"certo-bonded","network":"near:testnet","amount":"400000","asset":"<token account>","payTo":"<contract account>","maxTimeoutSeconds":60,"extra":{"seller":"chainfacts.sellers.certo.testnet","quoteId":"<32 hex>","termsId":"holders-v1","windowMs":120000,"feeBps":100}}]})`.
 2. Buyer SDK checks `get_seller` (bond, free capacity, fee, record) and `get_terms`, then sends `token.ft_transfer_call(receiver_id = contract, amount = "400000", msg = {"action":"pay", "seller", "quote_id", "terms_id", "request_hash"})` with 1 yoctoNEAR and 100 TGas. In the same transaction the seller receives 396_000 and the treasury 4_000.
 3. Buyer repeats the request with `PAYMENT-SIGNATURE: base64({"x402Version":2,"accepted":{…same entry…},"payload":{"callId":"…","buyer":"scout.testnet","txHash":"…"}})`.
 4. Middleware calls view `get_call(call_id)` and requires: exists, `status = Open`, `price ≥ quoted amount`, `terms_id` matches, **`request_hash` equals the hash of this request**, and the call has not been served before (in-memory set; a second request with the same `call_id` gets the cached response and receipt). It runs the handler, then answers with the body and `PAYMENT-RESPONSE: base64({"success":true,"network":"near:testnet","transaction":"<txHash>","payer":"<buyer>","receipt":{"callId","responseHash","statusCode","servedAtMs","sig"}})`. If the handler throws or returns ≥ 500, the middleware **still signs a receipt** with that status over the error body.
@@ -420,7 +421,7 @@ Panel path after the seller's answer:
 
 1. The buyer SDK sees `dispute_answered`, then `POST /cases` to the panel service: `{call_id, buyer_offer_bps, salt, request_canon, response_body}`.
 2. The service reads the call, dispute and terms from the contract, checks the hashes and the commitment locally, gets the three bodies from the view `build_panel_request`, sends each to its juror **byte for byte** (non-streaming, `x-no-aliasing: true`, `Accept-Encoding: identity`), stores raw response bytes, fetches `/v1/signature/<id>?model=…&signing_algo=ed25519` with up to 5 retries 500 ms apart, and calls `resolve` from the resolver account.
-3. If the service is down, after 60 s the buyer or seller can do steps 2–3 themselves with their own NEAR AI key (`npx makegood resolve <call_id>`); after 300 s `resolve_default` applies.
+3. If the service is down, after 60 s the buyer or seller can do steps 2–3 themselves with their own NEAR AI key (`npx certo resolve <call_id>`); after 300 s `resolve_default` applies.
 
 Timeouts in one place: SDK delivery timeout 10 s · seller answer/cure 30 s · resolver exclusive 60 s · panel deadline 300 s · dispute window 120 s (per seller).
 
@@ -522,14 +523,14 @@ A valid signature does not show that the model was asked once. Limits in this bu
 ### 4.6 Repository layout, commands, README
 
 ```
-makegood/
+certo/
   Makefile  README.md  LICENSE (MIT)  package.json (npm workspaces)  .env.example  .nvmrc (20)
-  contracts/makegood/      src/{lib,pay,dispute,panel,fees,queue,encode,events}.rs  Cargo.toml (features no_g1…no_g8)
+  contracts/certo/      src/{lib,pay,dispute,panel,fees,queue,encode,events}.rs  Cargo.toml (features no_g1…no_g8)
   contracts/mock-usdc/
-  res/                     makegood.wasm  mock_usdc.wasm  guards/makegood_no_g{1,2,3,5,7,8}.wasm  SHA256SUMS
+  res/                     certo.wasm  mock_usdc.wasm  guards/certo_no_g{1,2,3,5,7,8}.wasm  SHA256SUMS
   packages/core/           canonical encoders, receipt, hashing, types, golden-vector tests
   packages/seller/         Express middleware protect({contract, seller, termsId, price, receiptKey})
-  packages/buyer/          MakegoodClient.call(url, opts) / .dispute(callId, opts); CLI `makegood`
+  packages/buyer/          CertoClient.call(url, opts) / .dispute(callId, opts); CLI `certo`
   packages/panel/          service (live | replay), recorder, resolver
   packages/mcp/            stdio MCP server (SHOULD)
   apps/demo/               demo runner (4 scenes), demo seller, static page (three lanes), SSE feed
@@ -543,7 +544,7 @@ makegood/
 |---|---|---|---|
 | `make demo` | Node ≥ 20, network for `npm ci` (downloads the sandbox binary) | Starts a local chain, deploys both contracts from `res/`, registers two sellers with 50.00 bonds, runs the four scenes with the replay panel, prints a numbered transcript and serves the page at `http://localhost:4020` | Exit 0 and the final line `DEMO OK: 4/4 scenes, 3/3 juror signatures verified on chain`, in under 3 minutes |
 | `make test` | same | Encoder golden vectors (TS against the contract's `build_panel_request` and `receipt_text` views) and integration tests on the sandbox against the committed wasm. Rust unit tests run under `make build` (needs Rust) | All green, under 5 minutes |
-| `make guards` | same | For each guard: run the attack against `res/makegood.wasm` (must be rejected with the named error) and against the weakened `res/guards/makegood_no_gN.wasm` (the attack must succeed) | Table printed: `G1 … rejected / succeeds-when-removed` |
+| `make guards` | same | For each guard: run the attack against `res/certo.wasm` (must be rejected with the named error) and against the weakened `res/guards/certo_no_gN.wasm` (the attack must succeed) | Table printed: `G1 … rejected / succeeds-when-removed` |
 | `make verify` (SHOULD) | Node only, no chain | Recomputes hashes and verifies every recorded signature and the attestation binding from `fixtures/` | `VERIFY OK: N ballots` |
 | `make build` | Rust, `cargo-near` | Rebuilds all wasm and prints SHA-256 to compare with `res/SHA256SUMS` | — |
 | `make record` / `make killtest` | `NEARAI_API_KEY` | Records demo ballots / runs section 6 | — |
@@ -578,7 +579,7 @@ makegood/
 | Jurors | Three models on NEAR AI Cloud, answers and ed25519 signatures recorded on `<date>` from the live service; the contract verifies them | `make demo` replays recordings; it does not call NEAR AI. The live path needs your own key |
 | Attestation | Reports fetched from `cloud-api.near.ai` and committed; script checks that each report binds the juror key | Intel and NVIDIA certificate chains are not verified by the contract (and by the script only if STRETCH shipped). Juror keys are registered by the contract owner |
 | Buyer and seller | Real HTTP server, middleware and client; buyer agent is a script | Sellers are ours; data is fixture data; no third-party seller or buyer |
-| x402 | v2 header names and object shapes | Own scheme `makegood-bonded`; no facilitator; not interoperable with stock clients |
+| x402 | v2 header names and object shapes | Own scheme `certo-bonded`; no facilitator; not interoperable with stock clients |
 | Cross-chain refund | — | Not built. At most a `dry: true` Intents quote, labelled |
 | Disputes | Rule tier, non-delivery, content with final-offer choice, defaults on timeouts | No appeal. Re-asking is limited, not prevented. Responses over 6 KB cannot go to the panel |
 | Track record | Fee tiers and counters in the contract | 30-day decay is not modelled; counters are lifetime and since-last-step |
@@ -641,7 +642,7 @@ Prize money is per track and a submission lists every track it fits, so tags are
 
 ### 5.3 Differentiation
 
-**One sentence:** x402r and KAMIYO hold the buyer's payment in escrow and ask both sides to trust an arbiter or an oracle quorum, and Inari refunds only on timeout; Makegood pays the seller at once against the seller's own bond, and the NEAR contract itself checks three enclave-signed model votes before a cent of that bond moves.
+**One sentence:** x402r and KAMIYO hold the buyer's payment in escrow and ask both sides to trust an arbiter or an oracle quorum, and Inari refunds only on timeout; Certo pays the seller at once against the seller's own bond, and the NEAR contract itself checks three enclave-signed model votes before a cent of that bond moves.
 
 | | Seller paid | Bad content covered | Who decides | Decision checkable on chain |
 |---|---|---|---|---|
@@ -652,7 +653,7 @@ Prize money is per track and a submission lists every track it fits, so tags are
 | Inari (NEAR, this hackathon) | After worker signature | No: timeout refund only | Rule | Yes |
 | Agora (NEAR, this hackathon) | After three reviewers pass tests | Software jobs with test suites | 3 reviewer agents in TEEs, then a DAO vote | README: "The release is final, so there are no chargebacks" |
 | KAVREN, rubric-near (NEAR, this hackathon) | After acceptance / AI judge | Per job | Hosted evaluator / one AI judge | Partly |
-| **Makegood** | **In the paying transaction, up to the bond** | **Yes** | Rules, then 3 models of 3 families | **Yes: contract rebuilds the prompt and verifies the 3 signatures** |
+| **Certo** | **In the paying transaction, up to the bond** | **Yes** | Rules, then 3 models of 3 families | **Yes: contract rebuilds the prompt and verifies the 3 signatures** |
 
 ### 5.4 What was found in the 170 READMEs and 476 names
 
@@ -680,11 +681,11 @@ Layout: three lanes — **Buyer agent `scout`** (balance), **Seller** (balance, 
 | Shot | Time | Screen | On-screen numbers | Voice-over |
 |---|---|---|---|---|
 | V1 | 0–7 s | Black card, white text, then the three lanes fade in | "Your agent paid 0.40 for data. The data was wrong. Now what?" | "Agent payments are final. If the API you paid lies to you, the money is gone." |
-| V2 | 7–17 s | `scout` calls honest seller `chainfacts` | Buyer 10.00 → 9.60. Seller 0.000 → **0.396** in the same row as the payment. Bond 50.00, exposed 0.42, fee badge 1.0%. Caption: "paid in the same transaction" | "With Makegood the seller is paid instantly, because it posted a bond. Honest sellers never wait." |
-| V3 | 17–40 s | `scout` asks `GET /v1/holders?token=NEAR&top=5` from seller `cheapfacts`; response is highlighted: `"token":"NEO"`. Agent clicks nothing: its log line reads "asked NEAR, got NEO → claim a makegood". Seller's offer appears: 0%. Three juror badges light one after another, each with a green "signature verified by contract" tick | Offers: buyer 100% (sealed → revealed), seller 0%. Jurors: Qwen3.8 ✓ buyer, GLM-5.3 ✓ buyer, DeepSeek-V4.1 ✓ buyer. **3–0 in N s** (measured). Buyer 9.20 → **9.60**. Bond **50.00 → 49.58**. Fee badge **1.0% → 1.5%** | "This seller answers about the wrong token. The agent disputes. Three different models, each in its own enclave on NEAR AI Cloud, pick one of the two refund offers. The contract rebuilds the prompt and checks all three enclave signatures itself. Refund comes out of the seller's bond, and its fee goes up." |
+| V2 | 7–17 s | `scout` calls honest seller `chainfacts` | Buyer 10.00 → 9.60. Seller 0.000 → **0.396** in the same row as the payment. Bond 50.00, exposed 0.42, fee badge 1.0%. Caption: "paid in the same transaction" | "With Certo the seller is paid instantly, because it posted a bond. Honest sellers never wait." |
+| V3 | 17–40 s | `scout` asks `GET /v1/holders?token=NEAR&top=5` from seller `cheapfacts`; response is highlighted: `"token":"NEO"`. Agent clicks nothing: its log line reads "asked NEAR, got NEO → claim a refund". Seller's offer appears: 0%. Three juror badges light one after another, each with a green "signature verified by contract" tick | Offers: buyer 100% (sealed → revealed), seller 0%. Jurors: Qwen3.8 ✓ buyer, GLM-5.3 ✓ buyer, DeepSeek-V4.1 ✓ buyer. **3–0 in N s** (measured). Buyer 9.20 → **9.60**. Bond **50.00 → 49.58**. Fee badge **1.0% → 1.5%** | "This seller answers about the wrong token. The agent disputes. Three different models, each in its own enclave on NEAR AI Cloud, pick one of the two refund offers. The contract rebuilds the prompt and checks all three enclave signatures itself. Refund comes out of the seller's bond, and its fee goes up." |
 | V4 | 40–48 s | `scout-liar` disputes good data from `chainfacts` | Jurors 0–3. Liar's stake **−0.02**. Seller bond unchanged 50.00, fee stays 1.0% | "A buyer that lies loses three–nil and pays the ruling fee." |
 | V5 | 48–54 s | Presenter kills the `cheapfacts` process (terminal inset); `scout` pays, gets nothing, claims non-delivery; a 5 s countdown; refund | "seller silent 5 s → refund by rule, no panel". Buyer +0.40. Bond 49.58 → 49.16 | "Seller down? Refund by rule. No judge needed." |
-| V6 | 54–60 s | Terminal: `make guards` row G1 — one byte of a juror's answer changed from X to Y → red `E_BALLOT_SIG` | "Change one byte of a juror's answer → the chain refuses." Then end card: **Makegood — agents pay instantly. Bad calls get made good.** repo URL, "Built at NEAR HACKATHON" | "Change one byte of a vote and the chain says no. Makegood. Built on NEAR." |
+| V6 | 54–60 s | Terminal: `make guards` row G1 — one byte of a juror's answer changed from X to Y → red `E_BALLOT_SIG` | "Change one byte of a juror's answer → the chain refuses." Then end card: **Certo — agents pay instantly. Bad calls get refunded.** repo URL, "Built at NEAR HACKATHON" | "Change one byte of a vote and the chain says no. Certo. Built on NEAR." |
 
 Numbers check: bond after V3 = 50.00 − 0.40 − 0.02 = 49.58; after V5 = 49.58 − 0.40 − 0.02 = 49.16. Fee in V2 = 0.40 × 1.0% = 0.004. All of these are produced by `make demo`; the video is a recording of that run in live-panel mode if the key works on the day, otherwise replay mode with the on-screen label "panel answers recorded 12 Nov, signatures verified live".
 
@@ -696,7 +697,7 @@ Main post (279 characters, under the 280 limit; the video is attached to this po
 
 > Your AI agent paid for an API call and got garbage. That money is gone.
 >
-> Makegood: sellers post a bond and get paid instantly. Bad calls are refunded in seconds: 3 TEE models vote, and a NEAR contract checks their signatures.
+> Certo: sellers post a bond and get paid instantly. Bad calls are refunded in seconds: 3 TEE models vote, and a NEAR contract checks their signatures.
 >
 > Built at NEAR HACKATHON @NEARProtocol #NEARHackathon
 
@@ -801,7 +802,7 @@ Cost: 60 + 30×2 variants + 50 repeat asks ≈ 170 cases × 3 jurors ≈ 510 cal
 
 | | Full product | Fallback |
 |---|---|---|
-| Name | Makegood | **Makegood** (unchanged: money still comes back). Tagline: "Refunds by rule, from the seller's bond." |
+| Name | Certo | **Certo** (unchanged: money still comes back). Tagline: "Refunds by rule, from the seller's bond." |
 | Pitch | Chargebacks for agent API calls | "An SLA that pays: instant refunds from a seller's bond when a paid API call fails its published rules" |
 | Tiers | Rules + panel | Rules only: signed 5xx, no answer, not JSON, missing field, stale by `max_age_s`, and (new, 2 h) response slower than the terms' `max_latency_ms` measured between pay and the receipt's `served_at_ms` |
 | MUST changes | — | S3 (`claim_rule`) becomes MUST. Remove panel service, `answer`, `resolve`, offers, juror keys. Keep exposure accounting, lazy expiry, fee tiers, non-delivery cure |
@@ -824,7 +825,7 @@ Assumptions: one human, up to three coding agents in parallel, each on its own b
 | **10 Nov evening or 11 Nov 07:30** | H1 ★ Join NEAR Builders, claim the 10 USD NEAR AI key at nearbuilders.org/dashboard, put it in a local `.env` (never committed). Backup: an account at cloud.near.ai with 5 USD | 20 |
 | 11 Nov 07:30 | H2 Create the private GitHub repository and give the agents push access; decide the name (Q1) | 10 |
 | 11 Nov 12:30 | H3 ★ Review kill-test labels (before the run, ~11:00) and sign the go / no-go at 13:00 | 40 |
-| 12 Nov AM | H4 Create testnet accounts with the faucet: `makegood.testnet`, then sub-accounts `v1`, `usdc`, `resolver`, `sellers`, `chainfacts.sellers`, `cheapfacts.sellers`, `scout`, `scout-liar`; export keys to `.env` | 30 |
+| 12 Nov AM | H4 Create testnet accounts with the faucet: `certo.testnet`, then sub-accounts `v1`, `usdc`, `resolver`, `sellers`, `chainfacts.sellers`, `cheapfacts.sellers`, `scout`, `scout-liar`; export keys to `.env` | 30 |
 | 13 Nov AM | H5 Look at the X posts of "Bonded", "AgentBond", "Writ: Who Pays…" (5.4) | 30 |
 | 13 Nov PM | H6 Create or choose the mainnet payout account; collect submission fields (lead name, email, team size) | 15 |
 | 14 Nov 09:00–12:00 | H7 ★ Record the video (two takes), voice-over, export | 180 |
@@ -850,7 +851,7 @@ Assumptions: one human, up to three coding agents in parallel, each on its own b
 
 | ID | Task | Inputs | Output | Acceptance check | Depends | h |
 |---|---|---|---|---|---|---|
-| T06 ★ | Contract part 1: init, `register_seller`, bond via `ft_on_transfer`, `add_terms`, `pay` with instant payout and bounce, queue and sweep, `release`, `withdraw_bond`, views `get_seller`, `get_call`, `quote`, events | 4.2 | `contracts/makegood`, `res/makegood.wasm` | Sandbox tests: pay moves 0.396 to the seller in the same transaction; G2, G6, G9, G12 (queue part) pass | T01 | 4 |
+| T06 ★ | Contract part 1: init, `register_seller`, bond via `ft_on_transfer`, `add_terms`, `pay` with instant payout and bounce, queue and sweep, `release`, `withdraw_bond`, views `get_seller`, `get_call`, `quote`, events | 4.2 | `contracts/certo`, `res/certo.wasm` | Sandbox tests: pay moves 0.396 to the seller in the same transaction; G2, G6, G9, G12 (queue part) pass | T01 | 4 |
 | T07 ★ | Contract panel primitives: `esc`, `build_panel_request`, `receipt_text` views, `parse_vote`, and a test-only method `verify_ballot` that checks one recorded real signature | 4.4, fixtures from T03 | Rust module `panel.rs`, `encode.rs` | Sandbox test: `build_panel_request` output equals `packages/core` output for all golden vectors; **a recorded NEAR AI signature verifies inside the sandbox contract**; gas printed | T02, T03 | 3 |
 
 **Decision D2, 11 Nov 19:00:** T07's last check passes → level L3 (or L3-gateway). Encoders agree but signatures cannot be matched to a rebuilt body → L2. No ed25519 signatures at all → L1. Record the level in `docs/DESIGN.md`; README claims follow it.
@@ -888,7 +889,7 @@ Assumptions: one human, up to three coding agents in parallel, each on its own b
 |---|---|---|---|---|---|---|
 | T18 | Testnet deployment and one live run of the four scenes; `docs/TESTNET.md` with accounts and transaction hashes; `set_jurors` from that day's attestation | H4, key | Deployed contract, hashes | Explorer shows `dispute_resolved` with `tier: "panel"`; README section 8 filled | T12, H4 | 3 |
 | T19 | `claim_rule` (S3) and a fifth scene "stale data refunded by rule" | 4.2 | wasm, test | Stale response refunded; fresh response → `E_RULE_NOT_BROKEN` | T08 | 2 |
-| T20 | MCP server (S5) with three tools; a note in README on adding it to Claude Code | 4.1 | `packages/mcp` | `npx @modelcontextprotocol/inspector` lists the tools; `makegood_call` works against the sandbox | T10 | 2 |
+| T20 | MCP server (S5) with three tools; a note in README on adding it to Claude Code | 4.1 | `packages/mcp` | `npx @modelcontextprotocol/inspector` lists the tools; `certo_call` works against the sandbox | T10 | 2 |
 
 **Cut point D4, 13 Nov 19:00 — feature freeze.** Anything not merged and green is cut and moved to "not built" in the README. No new feature on 14 Nov. If T18 is not done, the entry ships sandbox-only (allowed by Q-012) and the README says so.
 
@@ -932,8 +933,8 @@ Assumptions: one human, up to three coding agents in parallel, each on its own b
 
 | # | Decision | Recommendation |
 |---|---|---|
-| Q1 | Project name | **Decided: Makegood** (maintainer, 10 Nov). It fixes the repo, package and account names |
-| Q2 | Accounts to create | Testnet: `makegood.testnet` and sub-accounts (free as of today). Mainnet: only the payout account the form requires. Registering `makegood.near` to hold the name is optional and costs a little NEAR; yes if the project continues after the hackathon |
+| Q1 | Project name | **Decided: Certo** (maintainer, 11 Nov; first choice Makegood, 10 Nov). It fixes the repo, package and account names |
+| Q2 | Accounts to create | Testnet: `certo.testnet` and sub-accounts (free as of today). Mainnet: only the payout account the form requires. Registering `certo.near` to hold the name is optional and costs a little NEAR; yes if the project continues after the hackathon |
 | Q3 | Track tags | `agents`, `business`, `security`, `open`. Drop `security` if you would rather not be compared with 225 entries, most of them spending guards |
 | Q4 | Spend | 0 USD beyond the free 10 USD of NEAR AI credits (expected use under 2 USD). Optional 5 USD backup key at cloud.near.ai. **No mainnet spend**; the Intents quote stays `dry: true` |
 | Q5 | Mock USDC or Circle testnet USDC on testnet | Mock (no faucet dependency). Switch only if there is spare time on 13 Nov PM |
@@ -972,7 +973,7 @@ Assumptions: one human, up to three coding agents in parallel, each on its own b
 | 19 | Guards "shown failing when removed" unspecified | Feature-gated weakened wasm builds committed; `make guards` runs the attack against both | The screener can see it without Rust |
 | 20 | Day plan: contract, middleware, SDK, MCP, panel, verifier, fees, rule tier, non-delivery, web timeline, replay, guards, two-hop stretch | MCP, sealed offers, on-chain schema/staleness rules, buyer record and testnet moved to SHOULD; two-hop, OutLayer, Intents out; four dated cut points | The baseline list did not fit four days with any slack |
 | 21 | Competitors: x402r, KAMIYO, Okay3, Fortytwo | Added Pact Network (rule-only refunds from a premium pool) and an IETF draft for x402 refund receipts; on NEAR added Agora's three-family TEE reviewers and Demerit's record-based bond pricing | Found today |
-| 22 | Name "Bonded chargebacks" | Makegood | "Bonded" is already a submission name |
+| 22 | Name "Bonded chargebacks" | Certo | "Bonded" is already a submission name |
 
 ---
 

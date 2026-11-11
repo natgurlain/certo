@@ -7,8 +7,8 @@ export function nearaiBaseUrl(): string {
   return (process.env.NEARAI_BASE_URL ?? "https://cloud-api.near.ai").replace(/\/$/, "");
 }
 
-// Juror table and reserve model come from @makegood/core (section 4.4), never duplicated here.
-export { JURORS, RESERVE_JUROR_MODEL } from "@makegood/core";
+// Juror table and reserve model come from @certo/core (section 4.4), never duplicated here.
+export { JURORS, RESERVE_JUROR_MODEL } from "@certo/core";
 
 export interface RawResponse {
   status: number;

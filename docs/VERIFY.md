@@ -33,7 +33,7 @@ and exits 1 with a list of problems otherwise.
 3. The ed25519 signature verifies under the registered key: the model's key for
    `provider_tee`, the gateway key for `gateway`, from the current or an earlier epoch.
 4. **Synthetic ballots** (`synthetic: true`, made by `makeSyntheticBallot` in
-   `@makegood/core`) verify only under the deterministic test keys derived from the
+   `@certo/core`) verify only under the deterministic test keys derived from the
    published seed, and are counted as synthetic. A ballot signed with a test key but not
    marked synthetic fails. Synthetic ballots prove nothing about NEAR AI.
 5. The vote (`parseVote`, same rule as the contract) is tallied per model.
@@ -66,7 +66,7 @@ key; old keys stay in `previous_epochs` so older recordings still verify. The co
 
 Recordings: `{model, request_body, response_body_b64, chat_id, signature: {text,
 signature, signing_address, signing_algo, signature_kind}, latency_ms, recorded_at,
-synthetic?}` (`PanelRecording` in `@makegood/core`). Written by `scripts/probe.ts`,
+synthetic?}` (`PanelRecording` in `@certo/core`). Written by `scripts/probe.ts`,
 `scripts/killtest.ts` and `scripts/record.ts` (`--synthetic` for test-key ballots). A real
 recording is never replaced by a synthetic one.
 

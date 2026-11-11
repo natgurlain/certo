@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import {
   recordingFileName, sha256Hex, systemClock, toBase64, verifyNearAiBallot,
   type Clock, type NearAiSignature, type PanelRecording,
-} from '@makegood/core';
+} from '@certo/core';
 
 export const NEARAI_BASE_URL = 'https://cloud-api.near.ai/v1';
 

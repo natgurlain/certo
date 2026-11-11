@@ -1,5 +1,5 @@
 {
-  "name": "@makegood/mcp",
+  "name": "@certo/mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,21 +8,21 @@
   },
   "types": "./src/index.ts",
   "bin": {
-    "makegood-mcp": "./bin/makegood-mcp.js"
+    "certo-mcp": "./bin/certo-mcp.js"
   },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@makegood/core": "0.1.0",
-    "@makegood/buyer": "0.1.0",
+    "@certo/core": "0.1.0",
+    "@certo/buyer": "0.1.0",
     "@modelcontextprotocol/sdk": "^1.20.0",
     "zod": "^3.25.0",
     "tsx": "^4.19.0"
   },
   "devDependencies": {
-    "@makegood/seller": "0.1.0",
+    "@certo/seller": "0.1.0",
     "express": "^5.1.0",
     "@types/express": "^5.0.0"
   }

@@ -89,7 +89,7 @@ async function pay(buyer: string, seller: string): Promise<string> {
   s.balance += PRICE - fee;
   s.exposed += PRICE + STAKE;
   s.calls += 1;
-  chain("call_paid", { call_id: callId, buyer: `${buyer}.test.near`, seller: `${seller}.sellers.makegood.test.near`, price: raw(PRICE), fee: raw(fee), fee_bps: s.feeBps, expires_at_ms: Date.now() + 120_000 });
+  chain("call_paid", { call_id: callId, buyer: `${buyer}.test.near`, seller: `${seller}.sellers.certo.test.near`, price: raw(PRICE), fee: raw(fee), fee_bps: s.feeBps, expires_at_ms: Date.now() + 120_000 });
   state();
   return callId;
 }
@@ -138,7 +138,7 @@ function stepFee(seller: string) {
   const s = sellers[seller];
   const i = FEE_STEPS.indexOf(s.feeBps);
   const next = FEE_STEPS[Math.min(i + 1, FEE_STEPS.length - 1)];
-  chain("fee_tier_changed", { seller: `${seller}.sellers.makegood.test.near`, from_bps: s.feeBps, to_bps: next });
+  chain("fee_tier_changed", { seller: `${seller}.sellers.certo.test.near`, from_bps: s.feeBps, to_bps: next });
   s.feeBps = next;
 }
 
@@ -177,7 +177,7 @@ async function script(): Promise<void> {
   const c2 = await pay("scout", "cheapfacts");
   send({ kind: "call", scene: 2, buyer: "scout", seller: "cheapfacts", request: REQUEST, price: amt(PRICE), callId: c2, status: 200, responsePreview: WRONG, highlight: '"token":"NEO"' });
   await sleep(1800);
-  send({ kind: "log", actor: "scout", text: "asked NEAR, got NEO → claim a makegood" });
+  send({ kind: "log", actor: "scout", text: "asked NEAR, got NEO → claim a refund" });
   await sleep(1200);
   await panelDispute(2, "scout", "cheapfacts", c2, "buyer");
   send({ kind: "log", actor: "scout", text: "refund 0.40 received, stake 0.02 returned" });

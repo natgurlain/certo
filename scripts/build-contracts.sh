@@ -36,15 +36,15 @@ echo "rustc: $(rustc --version)"
 echo "wasm-opt: $($WASM_OPT --version)"
 
 mkdir -p res/guards
-cargo build --locked --quiet --release --target "$T" --target-dir target/wasm -p makegood -p mock-usdc
-lower target/wasm/$T/release/makegood.wasm res/makegood.wasm
+cargo build --locked --quiet --release --target "$T" --target-dir target/wasm -p certo -p mock-usdc
+lower target/wasm/$T/release/certo.wasm res/certo.wasm
 lower target/wasm/$T/release/mock_usdc.wasm res/mock_usdc.wasm
 
 for g in $GUARDS; do
-  cargo build --locked --quiet --release --target "$T" --target-dir "target/wasm-no_g$g" -p makegood --features "no_g$g"
-  lower "target/wasm-no_g$g/$T/release/makegood.wasm" "res/guards/makegood_no_g$g.wasm"
+  cargo build --locked --quiet --release --target "$T" --target-dir "target/wasm-no_g$g" -p certo --features "no_g$g"
+  lower "target/wasm-no_g$g/$T/release/certo.wasm" "res/guards/certo_no_g$g.wasm"
 done
 
 if command -v sha256sum >/dev/null; then SHA="sha256sum"; else SHA="shasum -a 256"; fi
-( cd res && $SHA makegood.wasm mock_usdc.wasm guards/makegood_no_g*.wasm > SHA256SUMS )
+( cd res && $SHA certo.wasm mock_usdc.wasm guards/certo_no_g*.wasm > SHA256SUMS )
 cat res/SHA256SUMS

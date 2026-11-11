@@ -48,24 +48,24 @@ No NEAR AI key exists yet. `makeSyntheticBallot` produces a recording in the
 exact replay-fixture shape (`fixtures/panel/<sha256 of request body>.json`)
 with `synthetic: true`, signed by `syntheticJurorKey(i, seed)` =
 ed25519 seed `sha256("<seed>:juror:<i>")` (gateway: `"<seed>:gateway"`),
-default seed `makegood-synthetic-jurors-v1`. A sandbox contract initialised
+default seed `certo-synthetic-jurors-v1`. A sandbox contract initialised
 with these public keys accepts them; `make record` replaces them.
 
-The contract in `contracts/makegood` (read on 11 Nov) uses the same choices:
+The contract in `contracts/certo` (read on 11 Nov) uses the same choices:
 hex for 32-byte arguments and view fields, `Base64VecU8` for signatures,
 `get_config` nests the settings under `cfg` (the TS wrapper flattens it).
 
 ## Packages
 
 - **Source-only workspaces.** Each package's `exports` points at
-  `src/index.ts`; everything runs under `tsx` / `vitest`, and the `makegood`
-  and `makegood-mcp` bins are small JS shims that register `tsx`. No build
+  `src/index.ts`; everything runs under `tsx` / `vitest`, and the `certo`
+  and `certo-mcp` bins are small JS shims that register `tsx`. No build
   step; `npx tsc -b` at the root type-checks all packages (`noEmit`).
 - **Chain access.** `@near-js/{accounts,providers,signers,transactions}` 2.x,
-  not `near-api-js` 7 (which declares Node ≥ 22.22). `NearMakegoodChain` takes
+  not `near-api-js` 7 (which declares Node ≥ 22.22). `NearCertoChain` takes
   an RPC URL, contract, token and an `ed25519:…` secret key (or any signer), so
   a near-workspaces sandbox account works via `keyPair.toString()`.
-  `MakegoodChain` is the injectable interface; `@makegood/core/testing`
+  `CertoChain` is the injectable interface; `@certo/core/testing`
   exports `FakeChain`, an in-memory stand-in used only by unit tests (it is
   not a model of the contract).
 - **Seller `protect()`.** Option `contract` is the chain client. The
@@ -84,11 +84,11 @@ hex for 32-byte arguments and view fields, `Base64VecU8` for signatures,
 - **Buyer.** `call()` refuses before paying if the quote's `payTo`/`asset`
   differ from the configured contract/token, the price exceeds `maxPrice`,
   the seller or terms are unknown, or `quote().would_fit` is false. After
-  paying it throws `MakegoodError` with `callId` set (`TIMEOUT`,
+  paying it throws `CertoError` with `callId` set (`TIMEOUT`,
   `NO_RECEIPT`, `RECEIPT_MISMATCH`, `BAD_RECEIPT_SIG`) so the agent can claim
   non-delivery. Ruling stake = `quote().stake × 2^get_buyer().stake_mult_log2`.
-  The CLI keeps results and sealed offers in `~/.makegood/calls/` (override
-  `MAKEGOOD_STATE_DIR`) so `dispute`/`panel`/`claim-*` work across commands.
+  The CLI keeps results and sealed offers in `~/.certo/calls/` (override
+  `CERTO_STATE_DIR`) so `dispute`/`panel`/`claim-*` work across commands.
 - **Panel.** `POST /cases` requires status `Answered`, checks both evidence
   hashes and the commitment, gets the three bodies from the contract view
   `build_panel_request` and refuses if they differ from core's. With
@@ -100,15 +100,15 @@ hex for 32-byte arguments and view fields, `Base64VecU8` for signatures,
   `make record`. `startPanelFromEnv` reads `RESOLVER_ACCOUNT`,
   `RESOLVER_PRIVATE_KEY`, `PANEL_MODE`, `NEARAI_API_KEY`, `PANEL_PORT` (4021),
   `PANEL_FIXTURES_DIR` (default `fixtures/panel`).
-- **MCP.** Tools `makegood_call`, `makegood_dispute` (`kind`: content, error,
-  non_delivery), `makegood_status` (call and/or seller lookup; this is the
-  spec's `makegood_seller`). Env: as the CLI plus `PANEL_URL`.
+- **MCP.** Tools `certo_call`, `certo_dispute` (`kind`: content, error,
+  non_delivery), `certo_status` (call and/or seller lookup; this is the
+  spec's `certo_seller`). Env: as the CLI plus `PANEL_URL`.
 
 ## Not done / not verified
 
-- No test runs against a real sandbox or testnet; `NearMakegoodChain` signed
+- No test runs against a real sandbox or testnet; `NearCertoChain` signed
   calls are untested (views are tested against a mock JSON-RPC server).
-- Self-service `makegood resolve <call_id>` (buyer or seller running the panel
+- Self-service `certo resolve <call_id>` (buyer or seller running the panel
   with their own key after 60 s) is not in the CLI; use `PanelService`
   directly.
 - Live NEAR AI calls are tested only against a mock server; the real

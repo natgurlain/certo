@@ -1,6 +1,6 @@
 // Ask the three jurors about one case, verify each ballot offline, and summarise
 // (shared by killtest and probe).
-import { JURORS, buildPanelRequestFor, majority, type Side, type Vote } from "@makegood/core";
+import { JURORS, buildPanelRequestFor, majority, type Side, type Vote } from "@certo/core";
 import { askJuror, type Ballot } from "./nearai.ts";
 import { ballotToRecording, checkRecording, contentShape, saveRecording, usageOf } from "./ballots.ts";
 import type { JurorsFile } from "./jurors-file.ts";
@@ -58,7 +58,7 @@ export interface RunContext {
   panelDir: string | null; // where to save recordings; null = do not save
 }
 
-/** One case on the panel: three jurors in parallel, each body built by @makegood/core. */
+/** One case on the panel: three jurors in parallel, each body built by @certo/core. */
 export async function runCase(ctx: RunContext, c: { buyer_offer_pct: number; seller_offer_pct: number }, evidenceFor: (juror: number) => Evidence): Promise<CaseRun> {
   const t0 = performance.now();
   const ballots = await Promise.all(

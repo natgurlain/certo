@@ -3,10 +3,10 @@ import type { AddressInfo } from 'node:net';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ed25519FromLabel, toHex } from '@makegood/core';
-import { FakeChain } from '@makegood/core/testing';
-import { protect } from '@makegood/seller';
-import { MakegoodClient } from '@makegood/buyer';
+import { ed25519FromLabel, toHex } from '@certo/core';
+import { FakeChain } from '@certo/core/testing';
+import { protect } from '@certo/seller';
+import { CertoClient } from '@certo/buyer';
 import { createMcpServer, TOOL_CALL, TOOL_DISPUTE, TOOL_STATUS } from '../src/index.js';
 
 const SELLER = 'cheapfacts.test.near';
@@ -24,7 +24,7 @@ beforeAll(async () => {
   server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  const mcp = createMcpServer({ client: new MakegoodClient({ chain: chain.as('scout.test.near') }) });
+  const mcp = createMcpServer({ client: new CertoClient({ chain: chain.as('scout.test.near') }) });
   const [a, b] = InMemoryTransport.createLinkedPair();
   client = new Client({ name: 'test', version: '0' });
   await Promise.all([mcp.connect(a), client.connect(b)]);

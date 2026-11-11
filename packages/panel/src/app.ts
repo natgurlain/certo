@@ -1,5 +1,5 @@
 import express, { type Express } from 'express';
-import { ContractError } from '@makegood/core';
+import { ContractError } from '@certo/core';
 import { PanelMissError } from './jurors.js';
 import { CaseError, type PanelService } from './service.js';
 

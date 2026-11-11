@@ -4,8 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   decodeHeader, ed25519FromLabel, encodeHeader, HDR_PAYMENT_REQUIRED, HDR_PAYMENT_RESPONSE, HDR_PAYMENT_SIGNATURE, PAYMENT_SCHEME,
   receiptText, requestCanon, sha256Hex, toHex, verifyBase64, type PaymentRequired, type PaymentResponse, type PaymentSignature,
-} from '@makegood/core';
-import { FakeChain } from '@makegood/core/testing';
+} from '@certo/core';
+import { FakeChain } from '@certo/core/testing';
 import { createAnswerBot, protect } from '../src/index.js';
 
 const SELLER = 'chainfacts.test.near';

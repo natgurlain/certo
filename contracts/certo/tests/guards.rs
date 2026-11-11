@@ -1,5 +1,5 @@
 //! Guard tests G1–G15 (DESIGN 4.8) on the sandbox. For each guard with a
-//! weakened build (`res/guards/makegood_no_gN.wasm`, N = 1..8), the same attack
+//! weakened build (`res/guards/certo_no_gN.wasm`, N = 1..8), the same attack
 //! is run against the real wasm (must be rejected with the named error) and
 //! against the weakened wasm (must succeed).
 mod common;

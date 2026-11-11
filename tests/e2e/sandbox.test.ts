@@ -7,12 +7,12 @@ import { readFileSync } from 'node:fs';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MakegoodClient, MakegoodError, simplePolicy } from '@makegood/buyer';
+import { CertoClient, CertoError, simplePolicy } from '@certo/buyer';
 import {
   HDR_PAYMENT_REQUIRED, HDR_PAYMENT_SIGNATURE, JURORS, buildPanelRequestFor, decodeHeader, encodeHeader,
   hasEvent, receiptText, requestCanon, requestHash, type PaymentRequired, type PaymentSignature, type TxResult,
-} from '@makegood/core';
-import { PanelService, ReplayJurors, createPanelApp } from '@makegood/panel';
+} from '@certo/core';
+import { PanelService, ReplayJurors, createPanelApp } from '@certo/panel';
 import { choosePanel, demoCases, loadDemo, syntheticJurorsFile } from '../../apps/demo/src/fixtures.js';
 import { LocalChain, repoFile } from '../../apps/demo/src/sandbox.js';
 import { startDemoSeller, type DemoSeller } from '../../apps/demo/src/seller.js';
@@ -49,7 +49,7 @@ const MISSING_FIELD_BODY = '{"token":"NEAR","as_of":1794300196,"total_holders":3
 beforeAll(async () => {
   chain = await LocalChain.start(['mg', 'usdc', 'owner', 'resolver', ...SELLERS, ...BUYERS, ...VEC_CONTRACTS, ...VEC_SELLERS, ...VEC_BUYERS]);
   m = await deployMarket({
-    chain, contract: 'mg', token: 'usdc', owner: 'owner', resolver: 'resolver', wasm: 'res/makegood.wasm', deployToken: true,
+    chain, contract: 'mg', token: 'usdc', owner: 'owner', resolver: 'resolver', wasm: 'res/certo.wasm', deployToken: true,
     jurors: plan.jurors, gatewayKey: plan.gatewayKey, acceptGateway: plan.acceptGateway,
   });
   const terms = [{ terms_id: fx.terms.terms_id, text: fx.terms.text, panel: true }];
@@ -84,7 +84,7 @@ afterAll(async () => {
   await chain?.stop();
 });
 
-const buyer = (id: string, f?: typeof fetch) => new MakegoodClient({ chain: m.client(id), fetch: f });
+const buyer = (id: string, f?: typeof fetch) => new CertoClient({ chain: m.client(id), fetch: f });
 const view = () => m.client();
 const transfersTo = (tx: TxResult, to: string) => tx.logs
   .filter((l) => l.startsWith('EVENT_JSON:{"standard":"nep141","version":"1.0.0","event":"ft_transfer"'))
@@ -97,7 +97,7 @@ describe.concurrent('sandbox e2e', () => {
     const traced = m.client('b-clean');
     let payTx: TxResult | undefined;
     traced.onTx = (method, tx) => { if (method === 'ft_transfer_call(pay)') payTx = tx; };
-    const r = await new MakegoodClient({ chain: traced }).call(urlOf('s-clean'));
+    const r = await new CertoClient({ chain: traced }).call(urlOf('s-clean'));
     expect(r.status).toBe(200);
     expect(r.body).toBe(fx.responses.chainfacts);
     expect(simplePolicy(r).action).toBe('accept');
@@ -158,7 +158,7 @@ describe.concurrent('sandbox e2e', () => {
     const pay = await c.pay({ seller: 's-silent', quote_id: quoteId, terms_id: fx.terms.terms_id, request_hash: requestHash(requestCanon('GET', fx.request)), amount: PRICE });
     expect(hasEvent(pay, 'call_paid')).toBe(true);
     const callId = `s-silent/${quoteId}`;
-    const client = new MakegoodClient({ chain: c });
+    const client = new CertoClient({ chain: c });
     await client.claimNonDelivery(callId);
     await expect(c.resolveDefault({ call_id: callId })).rejects.toMatchObject({ code: 'E_TOO_EARLY' });
     const d = (await view().getCall(callId))!.dispute!;
@@ -193,9 +193,9 @@ describe.concurrent('sandbox e2e', () => {
     };
     const c = buyer('b-mismatch', tamper);
     const err = await c.call(urlOf('s-good')).then(() => null, (e: unknown) => e);
-    expect(err).toBeInstanceOf(MakegoodError);
-    expect((err as MakegoodError).code).toBe('RECEIPT_MISMATCH');
-    expect((await view().getCall((err as MakegoodError).callId!))?.status).toBe('Open');
+    expect(err).toBeInstanceOf(CertoError);
+    expect((err as CertoError).code).toBe('RECEIPT_MISMATCH');
+    expect((await view().getCall((err as CertoError).callId!))?.status).toBe('Open');
   });
 
   it('seller refuses to serve a request body other than the one paid for', async () => {
@@ -219,7 +219,7 @@ describe.concurrent('sandbox e2e', () => {
   });
 });
 
-describe('encoder agreement (contract views = @makegood/core) on every golden vector', () => {
+describe('encoder agreement (contract views = @certo/core) on every golden vector', () => {
   it('build_panel_request', async () => {
     for (const v of vectors.panel_requests) {
       const onChain = await view().buildPanelRequest({
@@ -240,7 +240,7 @@ describe('encoder agreement (contract views = @makegood/core) on every golden ve
     for (const contract of VEC_CONTRACTS) {
       const items = vectors.receipts.items.filter((r) => r.contract === contract);
       const vm = await deployMarket({
-        chain, contract, token: 'usdc', owner: 'owner', resolver: 'resolver', wasm: 'res/makegood.wasm', jurors: plan.jurors, gatewayKey: plan.gatewayKey,
+        chain, contract, token: 'usdc', owner: 'owner', resolver: 'resolver', wasm: 'res/certo.wasm', jurors: plan.jurors, gatewayKey: plan.gatewayKey,
       });
       for (const it of items) {
         const [seller, quoteId] = it.callId.split('/') as [string, string];

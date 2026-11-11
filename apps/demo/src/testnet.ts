@@ -16,7 +16,7 @@ import { KeyPairSigner } from '@near-js/signers';
 import { actionCreators } from '@near-js/transactions';
 import {
   ENV_PREFIX, FEE_BPS, ONE_NEAR, PRODUCT_ID, TGAS, ed25519FromSeed, formatUsdc, sha256, toHex, type Ed25519Key,
-} from '@makegood/core';
+} from '@certo/core';
 import { loadDemo, realKeys, syntheticJurorsFile, type PanelPlan } from './fixtures.js';
 import { demoConfig, repoFile, WASM, type JurorArg } from './sandbox.js';
 import { DEMO_BOND, DEMO_BUYER_FUNDS, TracedChain, type DemoWorld } from './world.js';
@@ -194,7 +194,7 @@ export async function dryRun(cfg: TestnetConfig, print: (l: string) => void = co
   const rpcBad = cfg.problems.some((p) => p.startsWith('NEAR_RPC_URL=') || p.startsWith('NEAR_NETWORK='));
   let rpcOk = !rpcBad;
   let accountProblems = 0;
-  const wasmHash: Partial<Record<Role, string>> = { contract: codeHashOf(WASM.makegood), token: codeHashOf(WASM.usdc) };
+  const wasmHash: Partial<Record<Role, string>> = { contract: codeHashOf(WASM.certo), token: codeHashOf(WASM.usdc) };
   for (const r of ROLES) {
     const a = cfg.accounts[r.role];
     const keyCol = a.privateKey ? `ok (${a.publicKey!.slice(0, 16)}…)` : cfg.problems.some((p) => p.startsWith(`${r.keyVar}:`)) ? 'INVALID' : r.keyRequired ? 'MISSING' : 'not set (optional)';
@@ -207,7 +207,7 @@ export async function dryRun(cfg: TestnetConfig, print: (l: string) => void = co
         if (!st.exists) { chainCol = 'UNKNOWN_ACCOUNT (create it, docs/TESTNET.md step 2)'; accountProblems++; } else {
           const low = st.amountYocto < BigInt(Math.round(r.minNear * 1000)) * 10n ** 21n;
           if (low) accountProblems++;
-          const code = st.codeHash === NO_CODE_HASH ? 'no code' : st.codeHash === wasmHash[r.role] ? `code = ${r.role === 'contract' ? WASM.makegood : WASM.usdc}` : `other code ${st.codeHash.slice(0, 8)}…`;
+          const code = st.codeHash === NO_CODE_HASH ? 'no code' : st.codeHash === wasmHash[r.role] ? `code = ${r.role === 'contract' ? WASM.certo : WASM.usdc}` : `other code ${st.codeHash.slice(0, 8)}…`;
           chainCol = `exists, ${near(st.amountYocto)}${low ? ` (LOW: needs ≥ ${r.minNear} NEAR)` : ''}${r.role === 'contract' || r.role === 'token' ? `, ${code}` : ''}`;
           if (wasmHash[r.role] && st.codeHash !== NO_CODE_HASH && st.codeHash !== wasmHash[r.role]) accountProblems++;
         }
@@ -354,7 +354,7 @@ export async function ensureDeployed(cfg: TestnetConfig, want: JurorWant, log: (
   };
 
   await deploy('token', WASM.usdc, {});
-  const fresh = await deploy('contract', WASM.makegood, {
+  const fresh = await deploy('contract', WASM.certo, {
     owner: A.owner.accountId, token: A.token.accountId, resolver: A.resolver.accountId,
     cfg: testnetContractConfig(want.acceptGateway), jurors: want.jurors, gateway_key: want.gatewayKey,
   });

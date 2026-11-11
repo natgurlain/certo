@@ -4,13 +4,13 @@
  * guard runner.
  */
 import {
-  ContractError, NearMakegoodChain, ONE_NEAR, ed25519FromLabel, toHex,
+  ContractError, NearCertoChain, ONE_NEAR, ed25519FromLabel, toHex,
   type Ed25519Key, type NearChainOptions, type TxResult,
-} from '@makegood/core';
+} from '@certo/core';
 import { demoConfig, type JurorArg, type LocalChain } from './sandbox.js';
 
 /** A chain client that reports every signed transaction (success or failure). */
-export class TracedChain extends NearMakegoodChain {
+export class TracedChain extends NearCertoChain {
   onTx?: (method: string, tx: TxResult, error?: ContractError) => void;
 
   constructor(o: NearChainOptions, onTx?: TracedChain['onTx']) {
@@ -39,7 +39,7 @@ export const DEMO_BUYER_FUNDS = '10000000';
  * What the demo runner needs from a chain, so the same four scenes run on the
  * local sandbox and on testnet. Actors are named by their demo label
  * (`scout`, `chainfacts`, `resolver`, …); `id(label)` is the account id
- * (the label itself on the sandbox, e.g. `scout.makegood.testnet` on testnet).
+ * (the label itself on the sandbox, e.g. `scout.certo.testnet` on testnet).
  */
 export interface DemoWorld {
   network: 'sandbox' | 'testnet';
@@ -64,7 +64,7 @@ export interface MarketSpec {
   token: string;
   owner: string;
   resolver: string;
-  /** Repo-relative wasm path of the makegood contract. */
+  /** Repo-relative wasm path of the certo contract. */
   wasm: string;
   jurors: JurorArg[];
   gatewayKey: string | null;

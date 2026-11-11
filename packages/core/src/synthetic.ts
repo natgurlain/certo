@@ -3,7 +3,7 @@ import { ed25519FromLabel, ed25519Sign, nearaiSignatureText, type Ed25519Key } f
 import type { PanelRecording } from './types.js';
 
 /** Default seed label for synthetic juror keys (test keys; never real NEAR AI keys). */
-export const SYNTHETIC_SEED = 'makegood-synthetic-jurors-v1';
+export const SYNTHETIC_SEED = 'certo-synthetic-jurors-v1';
 
 /** Deterministic test key for juror `jurorIndex` (or the gateway with index -1). */
 export function syntheticJurorKey(jurorIndex: number, seedKey: string = SYNTHETIC_SEED): Ed25519Key {

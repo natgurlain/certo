@@ -2,17 +2,17 @@
 
 Companion to [DESIGN.md](DESIGN.md) sections 4.2–4.5 and 4.8. It records the
 interface the TypeScript side calls and every choice made where the design was
-open. Source: `contracts/makegood/src/` (`lib`, `pay`, `dispute`, `panel`,
+open. Source: `contracts/certo/src/` (`lib`, `pay`, `dispute`, `panel`,
 `fees`, `queue`, `encode`, `events`, `consts`).
 
 ## Build and test
 
 | Command | Does |
 |---|---|
-| `./scripts/build-contracts.sh` (`make build`) | Builds `res/makegood.wasm`, `res/mock_usdc.wasm`, `res/guards/makegood_no_g{1..8}.wasm`, writes `res/SHA256SUMS`. Local paths are remapped out of the wasm |
-| `cargo test -p makegood --lib` | Unit tests: encoders, golden vectors, fee steps, settlement table, `parse_vote`, rules, exposure, G13 property test |
-| `cargo test -p makegood --test sandbox` | Sandbox tests for T06/T07/T08 against `res/*.wasm` |
-| `cargo test -p makegood --test guards -- --nocapture` | G1–G15; for G1–G8 the same attack against `res/makegood.wasm` and `res/guards/makegood_no_gN.wasm`, printing the pair |
+| `./scripts/build-contracts.sh` (`make build`) | Builds `res/certo.wasm`, `res/mock_usdc.wasm`, `res/guards/certo_no_g{1..8}.wasm`, writes `res/SHA256SUMS`. Local paths are remapped out of the wasm |
+| `cargo test -p certo --lib` | Unit tests: encoders, golden vectors, fee steps, settlement table, `parse_vote`, rules, exposure, G13 property test |
+| `cargo test -p certo --test sandbox` | Sandbox tests for T06/T07/T08 against `res/*.wasm` |
+| `cargo test -p certo --test guards -- --nocapture` | G1–G15; for G1–G8 the same attack against `res/certo.wasm` and `res/guards/certo_no_gN.wasm`, printing the pair |
 | `cargo test --workspace` | All of the above |
 
 Sandbox tests deploy the wasm in `res/`, so run the build script first after a
@@ -75,7 +75,7 @@ sandbox did so in 3 of 4 `make guards` runs (3 to 7 of the 8 rows failed);
 8 of 8 runs passed after the change. The demo prints the sandbox version it
 runs.
 
-Verified on 2026-11-11 with the committed `res/` (`res/SHA256SUMS`; `makegood.wasm` 354,412 bytes, SHA-256 `5a6a9031…`):
+Verified on 2026-11-11 with the pre-rename build (`makegood.wasm` 354,412 bytes, SHA-256 `5a6a9031…`). The rename to Certo changed only brand strings; the rebuilt `certo.wasm` (354,388 bytes, SHA-256 `9e8118ad…`) was re-checked on macOS arm64 only (demo, `npm test`, `make guards`, `cargo test` on nearcore 2.10.0):
 
 | Where | nearcore | Result |
 |---|---|---|
@@ -95,7 +95,7 @@ near` is required** (near-sdk selects the on-chain host functions only under
 this cfg; without it `sha256`, `ed25519_verify` and panics compile to
 pure-Rust fallbacks, every `require!` message is lost as a wasm `unreachable`
 trap, and the wasm grows to ~635 KB) and `-C link-arg=-s`. The built
-`makegood.wasm` imports `sha256` and `ed25519_verify` from `env`. It is about
+`certo.wasm` imports `sha256` and `ed25519_verify` from `env`. It is about
 354 KB, so the contract account needs about 3.5 NEAR for code storage.
 
 ## Encodings at the contract boundary
@@ -105,7 +105,7 @@ trap, and the wasm grows to ~635 KB) and `-C link-arg=-s`. The built
 - 64-byte ed25519 signatures (receipts, ballots): standard base64 with padding.
 - Token amounts: decimal strings (`U128`). Times: integer JSON numbers (ms).
 - `quote_id`: 32 lower-case hex characters; `call_id = "<seller>/<quote_id>"`.
-- Events: NEP-297 `EVENT_JSON:{"standard":"makegood","version":"1.0.0","event":…,"data":{…}}`;
+- Events: NEP-297 `EVENT_JSON:{"standard":"certo","version":"1.0.0","event":…,"data":{…}}`;
   `data` is one object (not an array).
 - Renaming: user-visible names (receipt prefix, event standard, system prompt)
   are constants in `src/consts.rs`.
@@ -246,16 +246,16 @@ Events: `jurors_set`, `resolver_set`, `treasury_withdrawn`, `seller_registered`,
     or base64), checks that `signature.text` equals the text the contract
     rebuilds, registers the recorded key with `set_jurors`, and calls
     `verify_ballot`. With no recordings it passes and prints that nothing was
-    verified. `MAKEGOOD_PANEL_DIR` points it at another directory (checked here
+    verified. `CERTO_PANEL_DIR` points it at another directory (checked here
     with three synthetic recordings).
 16. **`get_seller.free_capacity`** includes the simulated sweep; `reserved` is
     the stored (possibly stale-high) value.
 
-## Measured (`res/makegood.wasm` of this build, macOS arm64; nearcore 2.10.0, 2.14.0 in brackets where different)
+## Measured (`res/certo.wasm` of this build, macOS arm64; nearcore 2.10.0, 2.14.0 in brackets where different)
 
 | Transaction | Gas burnt, all receipts | Reproduce |
 |---|---|---|
-| `resolve` with three `provider_tee` ballots, buyer wins, one refund transfer | 10.64 TGas | `cargo test -p makegood --test sandbox t08_panel_buyer_wins -- --nocapture` (line `GAS resolve`) |
+| `resolve` with three `provider_tee` ballots, buyer wins, one refund transfer | 10.64 TGas | `cargo test -p certo --test sandbox t08_panel_buyer_wins -- --nocapture` (line `GAS resolve`) |
 | `resolve` with a gateway/provider_tee mix | 10.63 TGas | `… t08_gateway_ballots -- --nocapture` |
 | `ft_transfer_call` pay with payout | 11.57 TGas (11.80) | `… t06_pay_moves -- --nocapture` |
-| 600 payments from 20 concurrent buyers | 51 s wall clock (36 s) | `cargo test -p makegood --test guards g9 -- --nocapture` |
+| 600 payments from 20 concurrent buyers | 51 s wall clock (36 s) | `cargo test -p certo --test guards g9 -- --nocapture` |

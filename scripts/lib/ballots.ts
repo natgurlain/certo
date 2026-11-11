@@ -15,7 +15,7 @@ import {
   type PanelRecording,
   type Side,
   type Vote,
-} from "@makegood/core";
+} from "@certo/core";
 import type { Ballot } from "./nearai.ts";
 import { knownKeys, type JurorsFile } from "./jurors-file.ts";
 import { fileExists, readJson, repoPath, sha256Hex } from "./util.ts";

@@ -2,13 +2,13 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import {
   callIdOf, decodeHeader, ed25519FromSeed, encodeHeader, HDR_PAYMENT_REQUIRED, HDR_PAYMENT_RESPONSE, HDR_PAYMENT_SIGNATURE,
   isQuoteId, newQuoteId, PAYMENT_SCHEME, receiptText, requestCanon, sha256Hex, signBase64, stakeFor, systemClock,
-  type Clock, type Ed25519Key, type MakegoodChain, type PaymentRequired, type PaymentRequirement, type PaymentResponse,
+  type Clock, type Ed25519Key, type CertoChain, type PaymentRequired, type PaymentRequirement, type PaymentResponse,
   type PaymentSignature, type Receipt,
-} from '@makegood/core';
+} from '@certo/core';
 
 /** Chain access the middleware needs (views; `release` only if the client can sign). */
-export type SellerChain = Pick<MakegoodChain, 'contractId' | 'tokenId' | 'network' | 'getCall' | 'getSeller'> &
-  Partial<Pick<MakegoodChain, 'release' | 'accountId'>>;
+export type SellerChain = Pick<CertoChain, 'contractId' | 'tokenId' | 'network' | 'getCall' | 'getSeller'> &
+  Partial<Pick<CertoChain, 'release' | 'accountId'>>;
 
 /** What the middleware remembers about each served call (also used by the answer bot to `cure`). */
 export interface ServedCall {
@@ -26,7 +26,7 @@ export interface ServedCall {
 export type ServedStore = Map<string, Promise<ServedCall>>;
 
 export interface ProtectOptions {
-  /** Chain client for the makegood contract. */
+  /** Chain client for the certo contract. */
   contract: SellerChain;
   /** Seller account id (registered in the contract). */
   seller: string;

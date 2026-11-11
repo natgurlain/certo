@@ -1,6 +1,6 @@
 // `make guards` (DESIGN 4.8, T15): for each guard G1–G8, run the attack against
-// res/makegood.wasm (must be rejected with the named error) and against
-// res/guards/makegood_no_gN.wasm, built with that single check compiled out
+// res/certo.wasm (must be rejected with the named error) and against
+// res/guards/certo_no_gN.wasm, built with that single check compiled out
 // (the same attack must succeed). Prints the table and exits 1 if any row is wrong.
 //
 //   npx tsx tests/guards/run.ts [--only G1,G4]
@@ -8,7 +8,7 @@ import {
   ContractError, JURORS, buildPanelRequestFor, ed25519FromLabel, ed25519Sign, nearaiSignatureText, offerCommit,
   receiptText, requestCanon, requestHash, sha256Hex, signBase64, syntheticChatResponse, toBase64, toHex,
   type ContractBallot, type Ed25519Key, type TxResult,
-} from '@makegood/core';
+} from '@certo/core';
 import { LocalChain, WASM } from '../../apps/demo/src/sandbox.js';
 import { addSeller, deployMarket, type Market, type TracedChain } from '../../apps/demo/src/world.js';
 
@@ -210,7 +210,7 @@ async function runPair(chain: LocalChain, g: Guard): Promise<Row> {
   const bond = g.n === 2 || g.n === 6 ? '1000000' : '50000000';
   const windowMs = g.n === 4 ? 60_000 : 120_000;
   const one = async (variant: 'real' | 'weak') => {
-    const e = await setup(chain, `g${g.n}-${variant}`, variant === 'real' ? WASM.makegood : WASM.guard(g.n), bond, windowMs);
+    const e = await setup(chain, `g${g.n}-${variant}`, variant === 'real' ? WASM.certo : WASM.guard(g.n), bond, windowMs);
     const { tx, effect } = await g.attack(e);
     const rejected = tx.failures.some((f) => f.includes(g.code));
     if (rejected) return { rejected: true, text: `rejected ${g.code}` };
@@ -232,14 +232,17 @@ try {
   await chain.deploy('usdc', 'res/mock_usdc.wasm', { method: 'new', args: {} });
   // G4 moves the chain clock forward, so it runs after the others
   const [late, early] = [selected.filter((g) => g.n === 4), selected.filter((g) => g.n !== 4)];
-  rows = await Promise.all(early.map((g) => runPair(chain, g)));
+  // At most three pairs at once: with all seven in parallel, a busy machine's nearcore 2.10
+  // sandbox times out transactions (send_tx TIMEOUT_ERROR) and near-js backs off for minutes.
+  rows = [];
+  for (let i = 0; i < early.length; i += 3) rows.push(...(await Promise.all(early.slice(i, i + 3).map((g) => runPair(chain, g)))));
   for (const g of late) rows.push(await runPair(chain, g));
   rows.sort((a, b) => a.g.n - b.g.n);
 } finally {
   await chain.stop();
 }
 
-const header = ['guard', 'check', 'real contract (res/makegood.wasm)', 'guard removed (res/guards/makegood_no_gN.wasm)', 'verdict'];
+const header = ['guard', 'check', 'real contract (res/certo.wasm)', 'guard removed (res/guards/certo_no_gN.wasm)', 'verdict'];
 const table = rows.map((r) => [`G${r.g.n}`, r.g.check, r.real, r.weak, r.ok ? 'rejected / succeeds-when-removed' : 'WRONG']);
 const widths = header.map((h, i) => Math.max(h.length, ...table.map((row) => row[i]!.length)));
 const fmt = (row: string[]) => row.map((c, i) => c.padEnd(widths[i]!)).join('  ').trimEnd();

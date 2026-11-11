@@ -1,7 +1,7 @@
-import type { MakegoodChain } from '@makegood/core';
+import type { CertoChain } from '@certo/core';
 import type { ServedStore } from './protect.js';
 
-export type BotChain = Pick<MakegoodChain, 'getCall' | 'answer' | 'cure'>;
+export type BotChain = Pick<CertoChain, 'getCall' | 'answer' | 'cure'>;
 
 export interface AnswerBotOptions {
   chain: BotChain;
