@@ -14,7 +14,9 @@ npx certo seller init --bond 50 --terms terms.txt [--price 0.40] [--terms-id v1]
 
 It generates your receipt key (`~/.certo/seller-<account>.receipt-key`, mode 0600), registers you (attaches the
 contract's 1 NEAR registration deposit), publishes the terms (immutable; a change is a new terms id), deposits the bond,
-and prints a filled-in `protect()` snippet. Re-running skips the steps already done. A full server is
+adds a function-call access key for the answer bot (receiver: the contract; methods `answer` and `cure` only; 0.25 NEAR
+gas allowance; it cannot move funds; `--no-bot-key` skips it), and prints a filled-in `protect()` snippet. At run time
+the server needs no full-access key: `protect()` only reads the chain. Re-running skips the steps already done. A full server is
 [`examples/seller.ts`](../../examples/seller.ts).
 
 ## What to know

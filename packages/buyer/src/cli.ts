@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chainFromEnv, CLI_NAME, formatUsdc, parseAmountInput } from '@certo/core';
-import { sellerInit, type InitChain } from '@certo/seller';
+import { nearBotKeyAdder, sellerInit, type BotKeyAdder, type InitChain } from '@certo/seller';
 import { CertoClient, CertoError, describeOutcome, type BuyerChain } from './client.js';
 import { buyerChainFromEnv, ConfigError, resolveArgs } from './config.js';
 import { describeProgress, disputeAndSettle, helpFor, type DisputeKind } from './flow.js';
@@ -16,8 +16,9 @@ const USAGE = `usage: ${CLI_NAME} [--playground] <command> [args]
   dispute <call_id> [--kind content|error|rule|non_delivery] [--offer PCT] [--panel URL] [--wait S]
         open a dispute (or continue an open one) and wait up to S seconds (default 90) for the final outcome
   status <call_id>                       open / released / in dispute / refunded / unknown
-  seller init --bond B --terms FILE [--terms-id ID] [--price P] [--window S] [--no-panel] [--key-file F]
-        register as a seller (1 NEAR deposit), publish terms, deposit the bond, print the protect() snippet
+  seller init --bond B --terms FILE [--terms-id ID] [--price P] [--window S] [--no-panel] [--key-file F] [--no-bot-key]
+        register as a seller (1 NEAR deposit), publish terms, deposit the bond, add the answer bot's function-call key
+        (methods answer and cure only), print the protect() snippet
   low level: panel <call_id> --panel URL | claim-error <call_id> | claim-rule <call_id> | non-delivery <call_id> | resolve-default <call_id>
 amounts: "0.40" or "1 USDC" is USDC; a bare integer is base units (6 decimals); seller init --bond 50 means 50 USDC
 env: NEAR_RPC_URL, NEAR_NETWORK, CERTO_CONTRACT, CERTO_TOKEN, BUYER_ACCOUNT, BUYER_PRIVATE_KEY, CERTO_MAX_PRICE, PANEL_URL,
@@ -63,6 +64,8 @@ export interface CliDeps {
   maxPrice?: string;
   /** Signing seller chain for `seller init`. */
   sellerChain?: () => InitChain;
+  /** Adds the answer bot's function-call key for `seller init` (signed with the seller's full-access key). */
+  botKeyAdder?: (contractId: string) => BotKeyAdder;
   /** Where `seller init` keeps the receipt key (`CERTO_HOME`). */
   home?: string;
 }
@@ -183,6 +186,9 @@ async function seller(sub: string | undefined, rest: string[], deps: CliDeps, ou
     bond: bondUnits, termsText, termsId: flag(rest, 'terms-id'), price: price ? parseAmountInput(price) : undefined, windowMs,
     panel: !rest.includes('--no-panel'),
     keyFile: flag(rest, 'key-file') ?? join(deps.home ?? certoHome(), `seller-${chain.accountId}.receipt-key`), out,
+    botKey: deps.botKeyAdder && !rest.includes('--no-bot-key')
+      ? { file: join(deps.home ?? certoHome(), `seller-${chain.accountId}.bot-key`), add: deps.botKeyAdder(chain.contractId) }
+      : undefined,
   });
   return 0;
 }
@@ -204,6 +210,9 @@ export async function main(argv = process.argv.slice(2), env0 = process.env): Pr
         if (missing.length) throw new ConfigError(`${CLI_NAME} seller init: set ${missing.join(', ')} (and NEAR_RPC_URL, NEAR_NETWORK)`);
         return chainFromEnv(env, { accountId: env.SELLER_ACCOUNT!, privateKey: env.SELLER_PRIVATE_KEY! });
       },
+      botKeyAdder: (contractId) => nearBotKeyAdder({
+        rpcUrl: env.NEAR_RPC_URL ?? 'https://rpc.testnet.fastnear.com', accountId: env.SELLER_ACCOUNT!, privateKey: env.SELLER_PRIVATE_KEY!, contractId,
+      }),
     });
   } catch (e) {
     if (e instanceof ConfigError) { console.error(e.message); return 2; }

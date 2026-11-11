@@ -13,10 +13,10 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { fromHex } from '@certo/core';
+import { fromHex, NearCertoChain } from '@certo/core';
 import { CertoClient, runCli } from '@certo/buyer';
 import { PanelService, ReplayJurors, createPanelApp } from '@certo/panel';
-import { protect } from '@certo/seller';
+import { nearBotKeyAdder, protect } from '@certo/seller';
 import express from 'express';
 import { choosePanel, loadDemo } from '../../../apps/demo/src/fixtures.js';
 import { LocalChain, repoFile } from '../../../apps/demo/src/sandbox.js';
@@ -105,8 +105,9 @@ describe('sandbox e2e through certo-mcp --playground', () => {
     const terms = join(home, 'terms.txt');
     writeFileSync(terms, 'Returns {"answer": 42} as JSON.');
     const lines: string[] = [];
+    const botKeyAdder = (contractId: string) => nearBotKeyAdder({ rpcUrl: chain.rpcUrl, ...chain.key('newseller'), contractId });
     const code = await runCli(['seller', 'init', '--bond', '50', '--terms', terms, '--price', '0.25'], {
-      chain: undefined as never, stateDir: join(home, 'calls'), home, sellerChain: () => m.client('newseller'), out: (l) => lines.push(l),
+      chain: undefined as never, stateDir: join(home, 'calls'), home, sellerChain: () => m.client('newseller'), botKeyAdder, out: (l) => lines.push(l),
     });
     expect(code, lines.join('\n')).toBe(0);
     const out = lines.join('\n');
@@ -114,11 +115,22 @@ describe('sandbox e2e through certo-mcp --playground', () => {
     expect(out).toMatch(/bond: deposited 50.000000 USDC/);
     expect(out).toMatch(/protect\(\{ contract: chain, seller: 'newseller', termsId: 'v1', price: '250000'/);
     expect(await m.client().getSeller('newseller')).toMatchObject({ bond: '50000000', fee_bps: 100 });
+    expect(out).toMatch(/bot key: ed25519:\S+ in .*seller-newseller\.bot-key: function call only, receiver mg, methods answer, cure, gas allowance 0\.25 NEAR, no deposits \(tx /);
+    expect(out).toMatch(/createAnswerBot\(\{ chain: bot,/);
+    // the bot key reaches the contract for `answer` (contract-level panic: no such call) but not for anything else
+    const botKey = readFileSync(join(home, 'seller-newseller.bot-key'), 'utf8').trim();
+    const bot = new NearCertoChain({ rpcUrl: chain.rpcUrl, contractId: 'mg', tokenId: 'usdc', accountId: 'newseller', privateKey: botKey });
+    await expect(bot.answer('newseller/00000000000000000000000000000000', 0)).rejects.toThrow(/E_/);
+    const denied = await bot.withdrawBond('1').then(() => 'allowed', (e: Error) => e.message);
+    expect(denied).not.toBe('allowed');
+    expect(denied).not.toMatch(/Smart contract panicked/);
+    expect(denied).toMatch(/MethodNameMismatch|method/i);
     // re-running is a no-op that reuses the key
     lines.length = 0;
     expect(await runCli(['seller', 'init', '--bond', '0', '--terms', terms], {
-      chain: undefined as never, stateDir: join(home, 'calls'), home, sellerChain: () => m.client('newseller'), out: (l) => lines.push(l),
+      chain: undefined as never, stateDir: join(home, 'calls'), home, sellerChain: () => m.client('newseller'), botKeyAdder, out: (l) => lines.push(l),
     })).toBe(1); // a 0 bond is below the contract minimum
+    expect(lines.at(-1)).toMatch(/below the contract minimum/);
     // the snippet's protect() with the generated key: a buyer can quote it
     const app = express();
     const keyHex = readFileSync(join(home, 'seller-newseller.receipt-key'), 'utf8').trim();

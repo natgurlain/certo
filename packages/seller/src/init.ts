@@ -1,7 +1,31 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { Account } from '@near-js/accounts';
+import { KeyPair, type KeyPairString } from '@near-js/crypto';
+import { JsonRpcProvider } from '@near-js/providers';
+import { KeyPairSigner } from '@near-js/signers';
 import { ed25519FromSeed, formatUsdc, fromHex, ONE_NEAR, toHex, type CertoChain } from '@certo/core';
+
+/** The only contract methods the answer bot's key may call. */
+export const BOT_METHODS = ['answer', 'cure'];
+/** Gas allowance of the bot key (0.25 NEAR). */
+export const BOT_ALLOWANCE_YOCTO = 250_000_000_000_000_000_000_000n;
+
+/** Adds a function-call key (if missing) for `BOT_METHODS` on the contract; returns the tx hash, or undefined if it existed. */
+export type BotKeyAdder = (publicKey: string) => Promise<string | undefined>;
+
+/** `BotKeyAdder` signed with the seller's full-access key (used once, by `seller init`). */
+export function nearBotKeyAdder(o: { rpcUrl: string; accountId: string; privateKey: string; contractId: string }): BotKeyAdder {
+  const provider = new JsonRpcProvider({ url: o.rpcUrl });
+  const account = new Account(o.accountId, provider, KeyPairSigner.fromSecretKey(o.privateKey as KeyPairString));
+  return async (publicKey) => {
+    const has = await provider.viewAccessKey(o.accountId, publicKey).then(() => true, () => false);
+    if (has) return undefined;
+    const r = await account.addFunctionCallAccessKey({ publicKey, contractId: o.contractId, methodNames: BOT_METHODS, allowance: BOT_ALLOWANCE_YOCTO });
+    return r.transaction_outcome.id;
+  };
+}
 
 export type InitChain = Pick<
   CertoChain,
@@ -21,6 +45,8 @@ export interface SellerInitOptions {
   requiredFields?: string[];
   /** Receipt-key seed file (hex); created with mode 0600 when missing. */
   keyFile: string;
+  /** Answer-bot key: a function-call key limited to `answer` and `cure`, kept in `file` (created when missing). */
+  botKey?: { file: string; add: BotKeyAdder };
   out?: (line: string) => void;
 }
 
@@ -76,20 +102,39 @@ export async function sellerInit(chain: InitChain, o: SellerInitOptions): Promis
     out(`bond: deposited ${formatUsdc(o.bond)} USDC (tx ${tx.txHash})`);
   }
 
+  if (o.botKey) {
+    if (!existsSync(o.botKey.file)) {
+      writeFileSync(o.botKey.file, `${KeyPair.fromRandom('ed25519').toString()}\n`, { mode: 0o600, flag: 'wx' });
+    }
+    const pk = KeyPair.fromString(readFileSync(o.botKey.file, 'utf8').trim() as KeyPairString).getPublicKey().toString();
+    const tx = await o.botKey.add(pk);
+    out(`bot key: ${pk} in ${o.botKey.file}: function call only, receiver ${chain.contractId}, methods ${BOT_METHODS.join(', ')}, `
+      + `gas allowance ${Number(BOT_ALLOWANCE_YOCTO / 10n ** 21n) / 1000} NEAR, no deposits${tx ? ` (tx ${tx})` : ' (already added)'}`);
+  }
+
+  const signer = o.botKey
+    ? [
+      `const chain = chainFromEnv(process.env); // views only: protect() needs no key`,
+      `const bot = chainFromEnv(process.env, { accountId: '${seller}', privateKey: readFileSync('${o.botKey.file}', 'utf8').trim() }); // may call only answer and cure`,
+    ]
+    : [
+      `const chain = chainFromEnv(process.env, { accountId: '${seller}', privateKey: process.env.SELLER_PRIVATE_KEY! });`,
+      `const bot = chain;`,
+    ];
   const snippet = [
     `import { readFileSync } from 'node:fs';`,
     `import express from 'express';`,
     `import { chainFromEnv, fromHex } from '@certo/core';`,
     `import { createAnswerBot, protect } from '@certo/seller';`,
     ``,
-    `// env: NEAR_RPC_URL, NEAR_NETWORK, CERTO_CONTRACT=${chain.contractId}, CERTO_TOKEN=${chain.tokenId}, SELLER_PRIVATE_KEY`,
-    `const chain = chainFromEnv(process.env, { accountId: '${seller}', privateKey: process.env.SELLER_PRIVATE_KEY! });`,
+    `// env: NEAR_RPC_URL, NEAR_NETWORK, CERTO_CONTRACT=${chain.contractId}, CERTO_TOKEN=${chain.tokenId}${o.botKey ? '' : ', SELLER_PRIVATE_KEY'}`,
+    ...signer,
     `const mw = protect({ contract: chain, seller: '${seller}', termsId: '${termsId}', price: '${price}', // ${formatUsdc(price)} USDC`,
     `  receiptKey: fromHex(readFileSync('${o.keyFile}', 'utf8').trim()) });`,
     `const app = express();`,
     `app.get('/v1/answer', mw, (_req, res) => void res.json({ answer: 42 }));`,
     `app.listen(8080);`,
-    `createAnswerBot({ chain, store: mw.store }).start(1000); // answers disputes (offer 0%), cures non-delivery claims`,
+    `createAnswerBot({ chain: bot, store: mw.store }).start(1000); // answers disputes (offer 0%), cures non-delivery claims`,
   ].join('\n');
   out('');
   out('protect() snippet:');
