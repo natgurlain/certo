@@ -86,17 +86,15 @@ never executed (`tx` answered 408 for 60 s; most likely signed against a head
 that never became canonical, the same cause as `InvalidChain`). The demo prints
 the sandbox version it runs.
 
-**Current build** (panel-timeout rule G16 and the panel request's `max_tokens`
-4096): `certo.wasm` 354,380 bytes, SHA-256 `1f6ab2b7117d47027dafca38d319de5ae1909dbf10b92b99c45f4986758f36e3`;
+**Current build** (split rule G17, panel-timeout rule G16 and the panel request's `max_tokens`
+4096): `certo.wasm` 356,230 bytes, SHA-256 `aca96429481139397fe5e265659a9fe9a85093dddf827766d58c189ec7299b71`;
 it imports `sha256` and `ed25519_verify` from `env` and none of the gas-key host
-functions (checked with `wasm-dis`). Checked on macOS arm64 only, 2026-11-11:
-nearcore 2.10.0: `cargo test --workspace` 62/62 (28 unit, 15 guard, 19 sandbox),
-`make guards` 9/9 in six consecutive runs (58.2 to 62.5 s) after the merge of
-`main` and the final-block change below, `npm test` 198/198 and `make demo` `DEMO OK`
-(real demo ballots from `main`);
-nearcore 2.14.0: `cargo test --workspace` 62/62 (G12, a timing test, failed
-once in the full parallel run with other sandboxes on the machine; it then
-passed alone and in a rerun of the whole guard suite, 15/15). The Linux rows of the table were checked on the
+functions. Checked on macOS arm64 only, 2026-11-11, nearcore 2.10.0:
+`cargo test --workspace` 63/63 (28 unit, 16 guard, 19 sandbox), `make guards` 10/10 in
+three consecutive runs (60 to 70 s), the G17 guard-revert (the `no_g17` build swapped in
+as `certo.wasm` fails G17; restored by hash), `npm test` 217/217 (the MCP sandbox file
+needed one rerun under load), `make verify` 375 real ballots and `make demo` `DEMO OK: 5/5`.
+Not re-run on nearcore 2.14.0 for this build. The Linux rows of the table were checked on the
 earlier builds below and not repeated.
 
 Verified on 2026-11-11 with the pre-rename build (`makegood.wasm` 354,412 bytes, SHA-256 `5a6a9031…`). The rename to Certo changed only brand strings; the rebuilt `certo.wasm` (354,388 bytes, SHA-256 `9e8118ad…`) was re-checked on macOS arm64 only (demo, `npm test`, `make guards`, `cargo test` on nearcore 2.10.0):

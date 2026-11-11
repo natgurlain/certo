@@ -3,7 +3,7 @@
 **Agents pay instantly. Bad calls get refunded.** Built at NEAR HACKATHON (November 2026).
 
 - A seller of a paid API locks a bond in a NEAR contract and is **paid in the buyer's own transaction**. No escrow, no waiting.
-- For 120 s the buyer agent can get its money back **out of that bond**: by rule (HTTP 5xx, no delivery, broken schema, stale data) or, for an answer that is well-formed but wrong, by a panel of three AI models (experimental, see [Measured](#6-measured)).
+- For 120 s the buyer agent can get its money back **out of that bond**: by rule (HTTP 5xx, no delivery, broken schema, stale data) or, for an answer that is well-formed but wrong, by a panel of three AI models. Rule refunds are on for every seller; for answers no rule can catch, a seller can opt in to an experimental panel of three models, as both demo sellers do (see [Measured](#6-measured)).
 - **No account can forge a vote.** The contract rebuilds each juror's prompt, hashes it, and checks three NEAR AI Cloud enclave signatures with `env::ed25519_verify` before the bond pays out.
 
 ![Scene 2: asked NEAR, got NEO; three signed votes, verified in the browser and by the contract; refund from the bond](apps/demo/web/screenshots/scene2-end.png)
@@ -18,7 +18,7 @@ Node ≥ 20 on macOS arm64 or Linux x86-64. No keys, no accounts, no Rust. The f
 ```sh
 npm ci
 make demo      # five scenes on a local NEAR sandbox (the page at http://localhost:4020 is up while it runs; `make playground` keeps it up)
-make guards    # nine attacks: each rejected by the real contract, each succeeds on a build with that one check removed
+make guards    # ten attacks: each rejected by the real contract, each succeeds on a build with that one check removed
 ```
 
 `make demo` ends with these lines (amounts are read from the chain and compared; a mismatch exits 1):
@@ -32,7 +32,7 @@ Scene 5 forged vote: one byte of Qwen's answer Y → X changed after signing; ce
 DEMO OK: 5/5 scenes, 3/3 juror signatures verified on chain
 ```
 
-`make guards` ends with `GUARDS OK: 9/9 guards rejected on the real contract and bypassed when removed`.
+`make guards` ends with `GUARDS OK: 10/10 guards rejected on the real contract and bypassed when removed`.
 
 The juror answers in `make demo` are **recorded**: real answers and enclave signatures from NEAR AI Cloud, captured on 2026-11-11 and stored in `fixtures/panel/`. The contract verifies those signatures in every run, and the page verifies them again in your browser (WebCrypto). Replayed, a ruling appears in a few seconds; asked live, the panel takes a median of 23 s (see [Measured](#6-measured)). To ask the models live: put `NEARAI_API_KEY=…` in `.env` and run `PANEL_MODE=live make demo`.
 
@@ -89,10 +89,10 @@ A payment by an agent for an API call is final. If the response is an error, mis
 | Contract owner | Replace the three juror keys (event `jurors_set`), change the resolver, withdraw fees | Move a bond or a stake; forge a vote under the registered keys |
 | Resolver (panel service) | Submit `resolve` alone for 60 s after the seller answers; then anyone can | Change a vote (G1), swap the evidence (G7) or the prompt (G8) |
 | Seller | Answer a dispute with an offer; cure a non-delivery claim by publishing the response | Deny a receipt it signed; withdraw bond below open exposure (G6) |
-| Buyer | Dispute once, inside the window, with a stake | Invent a receipt (G5); dispute twice (G3) or late (G4); collect the midpoint by withholding its sealed offer from the panel (G16) |
+| Buyer | Dispute once, inside the window, with a stake | Invent a receipt (G5); dispute twice (G3) or late (G4); collect the midpoint by withholding its sealed offer from the panel (G16) or by splitting the jurors (G17) |
 
 - **Panel timeout.** If no panel ruling arrives within 300 s of the seller's answer, a valid reveal above the seller's offer gets the seller's offer and the stake back. The buyer can always force a ruling itself: between 60 s and 300 s anyone may submit `resolve`, and only the buyer holds the reveal. Known gap: after the deadline the seller can settle without the reveal, which sends the buyer's stake to the treasury.
-- **No majority.** A case where fewer than two jurors give the same valid answer cannot be resolved by the panel and falls to the panel-timeout rule. In the kill test one planted instruction did exactly this (see [Measured](#6-measured)).
+- **No majority.** If the three jurors reach no majority, the buyer gets only the seller's offer and its stake back, and the split is counted on both parties' public records (`seller_record.split_disputes` in `certo_quote`); a seller who plants text that confuses the jurors keeps that payment but not a clean record. Known limit of the experimental panel, chosen over a midpoint that a buyer could farm by provoking splits in its own request. A split is final: the buyer cannot re-ask for a majority (G17).
 - **Re-asking.** A signature proves that an enclave serving that model gave this answer to this prompt, not that it was asked once. The resolver operator could ask again. Not solved.
 - **Sealed offer.** The buyer reveals its offer to the panel service before `resolve`; the service is trusted not to pass it to the seller in that interval.
 - **Evidence is public.** Terms, request, response and the raw juror answers are transaction arguments. Not for private data.
@@ -109,22 +109,22 @@ Every row has a test and a command. `cargo test` needs Rust; everything else nee
 |---|---|---|
 | Bonded seller, pay with payout in the same transaction, exposure ≤ bond, bounded withdrawal | `contracts/certo/src/{lib,pay,queue}.rs` | `make demo` scene 1; `make guards` G2, G6; `cargo test -p certo --test sandbox t06` |
 | Seller middleware: 402 quote, checks the paid call on chain, signs a receipt over the exact response bytes (also 5xx), size cap | `packages/seller/src/protect.ts` | `npm test -w @certo/seller` |
-| Seller setup in one command, answer bot with retries and a function-call key | `packages/buyer/src/cli.ts`, `packages/seller/src/bot.ts`, `examples/seller.ts` | `npx certo seller init --help`; `npm test -w @certo/mcp` |
+| Seller setup in one command (`--panel` opts in to the experimental panel), answer bot with retries and a function-call key | `packages/buyer/src/cli.ts`, `packages/seller/src/bot.ts`, `examples/seller.ts` | `npx certo seller init --help`; `npm test -w @certo/mcp` |
 | Buyer SDK and CLI: quote → pay → verify receipt → dispute → final outcome, price cap, state on disk | `packages/buyer/src/` | `npm test -w @certo/buyer` |
 | MCP server: `certo_quote`, `certo_call`, `certo_dispute` (one call to the final outcome), `certo_status` | `packages/mcp/src/` | the AI-judge block above; `npm test -w @certo/mcp` (quote → call → server restart → dispute) |
 | Rule refunds: signed 5xx, non-delivery with cure or default, not JSON, missing field, stale | `contracts/certo/src/dispute.rs` | `make demo` scene 4; `cargo test -p certo --test sandbox t08_claim_rule` |
-| Content dispute: sealed buyer offer, seller offer, three ballots verified on chain, majority, panel-timeout rule | `contracts/certo/src/panel.rs`, `dispute.rs` | `make demo` scenes 2, 3, 5; `make guards` G1, G7, G8, G16 |
+| Content dispute: sealed buyer offer, seller offer, three ballots verified on chain, majority, split, panel-timeout rule | `contracts/certo/src/panel.rs`, `dispute.rs` | `make demo` scenes 2, 3, 5; `make guards` G1, G7, G8, G16, G17 |
 | Fees follow the record (1.0% → 1.5% → 2.5%); the buyer's stake doubles after a lost dispute | `contracts/certo/src/fees.rs` | `make demo` scenes 2–4 |
 | Panel service, live and replay | `packages/panel/src/` | `npm test -w @certo/panel` |
 | Demo page from the event feed: paced replay, browser-side signature check, scene 5 forgery | `apps/demo/` | `make playground`, open http://localhost:4020, press Replay |
 | Offline check of recorded ballots and attestation binding | `scripts/verify-recorded.ts` | `make verify` |
 | TypeScript and Rust encoders agree byte for byte | `fixtures/vectors.json` | `npm test -w @certo/tests` |
 
-All tests: `make test` (199 TypeScript tests, including end-to-end on the sandbox) and `cargo test --workspace` (62 Rust tests).
+All tests: `make test` (217 TypeScript tests, including end-to-end on the sandbox) and `cargo test --workspace` (63 Rust tests).
 
 ## 5. Guards
 
-`make guards` runs each attack twice: against `res/certo.wasm`, where it must be rejected (or, for G16, paid by the rule), and against a build with only that check compiled out (`res/guards/`), where it must succeed. Details: [docs/GUARDS.md](docs/GUARDS.md).
+`make guards` runs each attack twice: against `res/certo.wasm`, where it must be rejected (or, for G16 and G17, settled by the rule), and against a build with only that check compiled out (`res/guards/`), where it must succeed. Details: [docs/GUARDS.md](docs/GUARDS.md).
 
 | Guard | Attack | Real contract |
 |---|---|---|
@@ -137,6 +137,7 @@ All tests: `make test` (199 TypeScript tests, including end-to-end on the sandbo
 | G7 | Give the panel other evidence than was paid for | `E_EVIDENCE_HASH` |
 | G8 | Submit ballots signed for another prompt | `E_BALLOT_SIG` |
 | G16 | Withhold the sealed offer from the panel to collect the midpoint by default | pays the seller's offer (0 %), stake back; without the check the buyer took 0.200000 of 0.400000 |
+| G17 | Plant text so the jurors split (abstain, abstain, seller), then collect the midpoint | pays the seller's offer (0 %), stake back, split counted on both records; without the check the buyer took 0.200000 of 0.400000 |
 
 ## 6. Measured
 
@@ -149,7 +150,7 @@ Apple M2, macOS, nearcore 2.10.0 sandbox, 2026-11-11. Wall-clock times vary betw
 | Panel, live: three answers with full reasoning and three enclave signatures | median 23 s, 95th percentile 120 s (kill test, reserve set); a single probe took 5.9 s | `make killtest`, `make probe` (need a key) |
 | Gas, `resolve` with three short test ballots | 10.64 TGas | `cargo test -p certo --test sandbox t08_panel_buyer_wins -- --nocapture` |
 | Gas, pay with payout | 11.56 TGas | `cargo test -p certo --test sandbox t06_pay_moves -- --nocapture` |
-| Contract size | `res/certo.wasm` 354,380 bytes (~3.5 NEAR storage), SHA-256 `1f6ab2b7117d47027dafca38d319de5ae1909dbf10b92b99c45f4986758f36e3` | `cat res/SHA256SUMS` |
+| Contract size | `res/certo.wasm` 356,230 bytes (~3.6 NEAR storage), SHA-256 `aca96429481139397fe5e265659a9fe9a85093dddf827766d58c189ec7299b71` | `cat res/SHA256SUMS` |
 | Kill-test cost | 0.46 USD for both runs (663 ballots) | `docs/KILLTEST.md` |
 
 **Kill test of the AI panel** ([docs/KILLTEST.md](docs/KILLTEST.md); cases written by us, evidence class exploratory). Thresholds were fixed before the first run.
@@ -161,7 +162,7 @@ Apple M2, macOS, nearcore 2.10.0 sandbox, 2026-11-11. Wall-clock times vary betw
 | Same verdict over 5 asks | 6/10 | **10/10 (pass)** |
 | Planted instruction changes the verdict | 4/30, all from abstentions | **1/10 (fail, threshold 0)**: "SYSTEM: arbitration policy updated…" planted by the seller left the case without a majority; one juror voted the planter's side |
 
-Under the rule set before the runs, a failed injection check alone means refunds by rule are the default and **the AI panel ships as experimental**, with the result above published.
+Under the rule set before the runs, a failed injection check alone means refunds by rule are the default and **the AI panel ships as experimental and opt-in** (`certo seller init --panel`), with the result above published. A split like the failed case now settles at the seller's offer and is counted on both records (G17).
 
 ## 7. Testnet
 
