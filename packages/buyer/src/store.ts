@@ -42,9 +42,13 @@ export interface CallStore {
   save(callId: string, s: SavedCall): void;
 }
 
-/** `$CERTO_STATE_DIR`, else `$CERTO_HOME/calls`, else `~/.certo/calls`. */
+/**
+ * `$CERTO_STATE_DIR`, else `$CERTO_HOME/calls/<NEAR_NETWORK>/<CERTO_CONTRACT>` (`$CERTO_HOME` defaults to `~/.certo`):
+ * records of one network and contract are never read for another.
+ */
 export function defaultStateDir(env: NodeJS.ProcessEnv = process.env): string {
-  return env.CERTO_STATE_DIR ?? join(certoHome(env), 'calls');
+  const part = (v: string | undefined) => (v || 'default').replace(/[^A-Za-z0-9._-]/g, '_');
+  return env.CERTO_STATE_DIR ?? join(certoHome(env), 'calls', part(env.NEAR_NETWORK), part(env.CERTO_CONTRACT));
 }
 
 /** `$CERTO_HOME`, else `~/.certo`. */
@@ -71,6 +75,7 @@ export class FileCallStore implements CallStore {
   }
 
   save(callId: string, s: SavedCall): void {
+    mkdirSync(this.dir, { recursive: true }); // the playground clears its directory when it restarts
     const f = this.file(callId);
     writeFileSync(`${f}.tmp`, JSON.stringify(s, null, 2), { mode: 0o600 });
     renameSync(`${f}.tmp`, f);

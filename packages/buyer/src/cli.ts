@@ -10,9 +10,9 @@ import { certoHome, defaultStateDir, FileCallStore } from './store.js';
 
 const USAGE = `usage: ${CLI_NAME} [--playground] <command> [args]
   quote <url> [--method M] [--body B]   look before paying: price, bond, free capacity, fee, losses, window, terms
-  call <url> [--method M] [--body B] [--max-price P] [--auto] [--panel URL]
+  call <url> [--method M] [--body B] [--max-price P] [--auto] [--panel URL] [--wait S]
         pay for one protected call (refused above the cap: CERTO_MAX_PRICE, default 1.00 USDC);
-        --auto applies the demo policy (5xx → error claim, wrong token → content dispute)
+        --auto applies the demo policy (5xx → error claim, wrong token → content dispute) and follows it like dispute
   dispute <call_id> [--kind content|error|rule|non_delivery] [--offer PCT] [--panel URL] [--wait S]
         open a dispute (or continue an open one) and wait up to S seconds (default 90) for the final outcome
   status <call_id>                       open / released / in dispute / refunded / unknown
@@ -22,7 +22,7 @@ const USAGE = `usage: ${CLI_NAME} [--playground] <command> [args]
   low level: panel <call_id> --panel URL | claim-error <call_id> | claim-rule <call_id> | non-delivery <call_id> | resolve-default <call_id>
 amounts: "0.40" or "1 USDC" is USDC; a bare integer is base units (6 decimals); seller init --bond 50 means 50 USDC
 env: NEAR_RPC_URL, NEAR_NETWORK, CERTO_CONTRACT, CERTO_TOKEN, BUYER_ACCOUNT, BUYER_PRIVATE_KEY, CERTO_MAX_PRICE, PANEL_URL,
-     CERTO_STATE_DIR (default ~/.certo/calls); seller init: SELLER_ACCOUNT, SELLER_PRIVATE_KEY
+     CERTO_STATE_DIR (default ~/.certo/calls/<network>/<contract>); seller init: SELLER_ACCOUNT, SELLER_PRIVATE_KEY
 --playground loads ~/.certo/playground.env (or $CERTO_HOME/playground.env) written by \`make playground\``;
 
 class UsageError extends Error {}
@@ -71,14 +71,26 @@ export interface CliDeps {
 }
 
 const COMMANDS = ['quote', 'call', 'dispute', 'status', 'panel', 'claim-error', 'claim-rule', 'non-delivery', 'resolve-default'];
+/** `help`, or `--help` / `-h` after any command (`certo seller init --help`). */
+const wantsHelp = (argv: string[]) => argv[0] === 'help' || argv.some((a) => a === '--help' || a === '-h');
+
+/** `dispute`, and `call --auto`: open (or continue) and follow to the final outcome, printing what happened. */
+async function followDispute(client: CertoClient, callId: string, o: Parameters<typeof disputeAndSettle>[2], out: (l: string) => void): Promise<void> {
+  const r = await disputeAndSettle(client, callId, o);
+  if (r.opened) {
+    out(`${r.opened.kind} dispute opened tx ${r.opened.tx}${r.opened.stake ? `, stake ${formatUsdc(r.opened.stake)}` : ''}`
+      + `${r.opened.sealedOfferPct !== undefined ? `, sealed offer ${r.opened.sealedOfferPct}%` : ''}`);
+  }
+  out(describeProgress(r.progress));
+}
 
 /** Runs one CLI command; call records and sealed offers persist as JSON files in `stateDir`. */
 export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
   const out = deps.out ?? ((l: string) => console.log(l));
   const [cmd, target, ...rest] = argv;
   try {
+    if (!cmd || wantsHelp(argv)) { out(USAGE); return 0; }
     if (cmd === 'seller') return await seller(target, rest, deps, out);
-    if (!cmd || cmd === 'help' || cmd === '--help') { out(USAGE); return 0; }
     if (!COMMANDS.includes(cmd)) { out(USAGE); return 2; }
     if (!target || target.startsWith('--')) throw new UsageError(`${cmd} needs a ${cmd === 'quote' || cmd === 'call' ? 'URL' : 'call id'}`);
     const client = new CertoClient({ chain: deps.chain, fetch: deps.fetch, maxPrice: deps.maxPrice, store: new FileCallStore(deps.stateDir) });
@@ -101,17 +113,9 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
         if (rest.includes('--auto')) {
           const d = simplePolicy(r);
           out(`policy: ${d.action} (${d.reason})`);
-          if (d.action === 'claim_error') out(`claim_error tx ${(await client.claimError(r)).txHash}`);
-          if (d.action === 'dispute') {
-            const rec = await client.dispute(r, { offerBps: d.offerBps });
-            out(`dispute opened tx ${rec.tx.txHash}, stake ${formatUsdc(rec.stake)}, sealed offer ${rec.offerBps / 100}%`);
-            const url = flag(rest, 'panel');
-            if (url) {
-              const c = await client.waitForStatus(r.callId, ['Answered']);
-              out(`seller answered ${c?.dispute?.seller_offer_bps ?? '?'} bps`);
-              out(JSON.stringify(await client.submitToPanel(url, r.callId)));
-            }
-          }
+          const follow = { panelUrl: flag(rest, 'panel') ?? deps.panelUrl, maxWaitMs: intFlag(rest, 'wait', 90, 0, 3600) * 1000 };
+          if (d.action === 'claim_error') await followDispute(client, r.callId, { ...follow, kind: 'error' }, out);
+          if (d.action === 'dispute') await followDispute(client, r.callId, { ...follow, kind: 'content', offerPct: d.offerBps / 100 }, out);
         }
         return 0;
       }
@@ -120,17 +124,12 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
         if (!['content', 'error', 'rule', 'non_delivery'].includes(kind)) throw new UsageError(`--kind must be content, error, rule or non_delivery, got "${kind}"`);
         const offerPct = intFlag(rest, 'offer', 100, 0, 100);
         const wait = intFlag(rest, 'wait', 90, 0, 3600);
-        const r = await disputeAndSettle(client, target, { kind, offerPct, panelUrl: flag(rest, 'panel') ?? deps.panelUrl, maxWaitMs: wait * 1000 });
-        if (r.opened) {
-          out(`${r.opened.kind} dispute opened tx ${r.opened.tx}${r.opened.stake ? `, stake ${formatUsdc(r.opened.stake)}` : ''}`
-            + `${r.opened.sealedOfferPct !== undefined ? `, sealed offer ${r.opened.sealedOfferPct}%` : ''}`);
-        }
-        out(describeProgress(r.progress));
+        await followDispute(client, target, { kind, offerPct, panelUrl: flag(rest, 'panel') ?? deps.panelUrl, maxWaitMs: wait * 1000 }, out);
         return 0;
       }
       case 'status': {
         const s = await client.status(target);
-        out(`${s.state}: ${s.detail}`);
+        out(s.detail.startsWith(`${s.state}:`) ? s.detail : `${s.state}: ${s.detail}`);
         if (s.call) out(JSON.stringify(s.call, null, 2));
         return 0;
       }
@@ -198,7 +197,7 @@ export async function main(argv = process.argv.slice(2), env0 = process.env): Pr
   try {
     const { argv: args, env } = resolveArgs(argv, env0);
     const cmd = args[0];
-    const needsBuyer = !!cmd && COMMANDS.includes(cmd);
+    const needsBuyer = !!cmd && COMMANDS.includes(cmd) && !wantsHelp(args);
     return await runCli(args, {
       chain: (needsBuyer ? buyerChainFromEnv(env) : undefined) as BuyerChain,
       stateDir: defaultStateDir(env),

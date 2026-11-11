@@ -1,8 +1,9 @@
-import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { playgroundEnv, playgroundEnvPath, writePlaygroundEnv, type PlaygroundInfo } from '../src/playground.js';
+import { defaultStateDir, withPlayground } from '@certo/buyer';
+import { playgroundEnv, playgroundEnvPath, playgroundStateDir, writePlaygroundEnv, type PlaygroundInfo } from '../src/playground.js';
 
 const info: PlaygroundInfo = {
   rpcUrl: 'http://127.0.0.1:3030', contract: 'certo', token: 'usdc', buyer: 'agent', buyerPrivateKey: 'ed25519:abc',
@@ -30,6 +31,19 @@ describe('playground.env', () => {
     writePlaygroundEnv(info, path);
     expect(readFileSync(path, 'utf8')).toBe(playgroundEnv(info));
     expect(statSync(path).mode & 0o777).toBe(0o600);
+  });
+
+  it('a new playground starts with no call records: those of an earlier sandbox are cleared', () => {
+    const home = mkdtempSync(join(tmpdir(), 'certo-pg-'));
+    const path = join(home, 'playground.env');
+    const calls = playgroundStateDir(info, path);
+    expect(calls).toBe(join(home, 'calls', 'sandbox', 'certo'));
+    mkdirSync(calls, { recursive: true });
+    writeFileSync(join(calls, 'cheapfacts_old.json'), '{"outcome":{"result":"refunded"}}');
+    writePlaygroundEnv(info, path);
+    // the directory certo --playground and certo-mcp --playground use for this sandbox
+    expect(defaultStateDir(withPlayground({ CERTO_HOME: home }))).toBe(calls);
+    expect(existsSync(join(calls, 'cheapfacts_old.json'))).toBe(false);
   });
 
   it('refuses a value that would need quoting', () => {

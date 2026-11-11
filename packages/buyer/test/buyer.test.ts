@@ -8,8 +8,8 @@ import { ed25519FromLabel, EVENT_STANDARD, offerCommit, toHex, type Clock } from
 import { FakeChain } from '@certo/core/testing';
 import { protect } from '@certo/seller';
 import {
-  buyerChainFromEnv, CertoClient, CertoError, ConfigError, disputeAndSettle, exampleUrls, FileCallStore, main, NO_PLAYGROUND, runCli,
-  simplePolicy, withPlayground, type CallResult,
+  buyerChainFromEnv, CertoClient, CertoError, ConfigError, defaultStateDir, disputeAndSettle, exampleUrls, FileCallStore, main, NO_PLAYGROUND,
+  runCli, simplePolicy, withPlayground, type CallResult,
 } from '../src/index.js';
 
 const SELLER = 'cheapfacts.test.near';
@@ -41,7 +41,12 @@ app.get('/poor', protect({ contract: chain, seller: 'poor.test.near', termsId: '
 app.get('/badkey', protect({ contract: chain, seller: SELLER, termsId: 'holders-v1', price: '400000', receiptKey: ed25519FromLabel('other') }), (_q, r) => void r.json({}));
 app.get('/pricey', protect({ contract: chain, seller: SELLER, termsId: 'holders-v1', price: '1500000', receiptKey: key }), (_q, r) => void r.json({ token: 'X' }));
 let panelVerdict: ((callId: string) => unknown) | undefined;
-app.post('/cases', express.json(), (req, res) => void res.json(panelVerdict ? panelVerdict(req.body.call_id) : { received: req.body }));
+let panelStatus = 200;
+let panelHits = 0;
+app.post('/cases', express.json(), (req, res) => {
+  panelHits++;
+  res.status(panelStatus).json(panelVerdict ? panelVerdict(req.body.call_id) : { received: req.body });
+});
 
 let base = '';
 let server: ReturnType<typeof app.listen>;
@@ -161,10 +166,11 @@ describe('CLI', () => {
     const lines: string[] = [];
     const stateDir = mkdtempSync(join(tmpdir(), 'mg-cli-'));
     const deps = { chain: buyerChain, stateDir, out: (l: string) => lines.push(l) };
-    expect(await runCli(['call', `${base}/wrong?token=NEAR&top=5`, '--auto'], deps)).toBe(0);
+    expect(await runCli(['call', `${base}/wrong?token=NEAR&top=5`, '--auto', '--wait', '0'], deps)).toBe(0);
     expect(lines.join('\n')).toMatch(/paid 0\.400000 call .* receipt verified/);
     expect(lines.join('\n')).toMatch(/policy: dispute \(asked for NEAR, got NEO\)/);
-    expect(lines.join('\n')).toMatch(/dispute opened tx .* stake 0\.020000, sealed offer 100%/);
+    expect(lines.join('\n')).toMatch(/content dispute opened tx .* stake 0\.020000, sealed offer 100%/);
+    expect(lines.at(-1)).toMatch(/^still open \(Disputed\)/);
     const callId = /call (\S+) tx/.exec(lines[0]!)![1]!;
     await chain.answer.call(chain.as(SELLER), callId, 0);
     lines.length = 0;
@@ -181,6 +187,69 @@ describe('CLI', () => {
 });
 
 const resolved = (data: Record<string, unknown>) => ({ standard: EVENT_STANDARD, version: '1.0.0', event: 'dispute_resolved', data });
+
+describe('CLI follow-through and help', () => {
+  it('call --auto follows the dispute to the final outcome like dispute; status prints the state once', async () => {
+    const lines: string[] = [];
+    // the seller answers as soon as the dispute lands; the panel then rules for the buyer
+    const auto = Object.assign(chain.as(BUYER), {
+      disputeContent: async (a: Parameters<FakeChain['disputeContent']>[0]) => {
+        const tx = await chain.as(BUYER).disputeContent(a);
+        await chain.as(SELLER).answer(a.call_id, 0);
+        return tx;
+      },
+    });
+    panelVerdict = (id) => {
+      chain.calls.delete(id);
+      return { submitted: true, txHash: 'tx-resolve', events: [resolved({ call_id: id, tier: 'panel', winner: 'buyer', votes: ['buyer', 'buyer', 'buyer'], refund: '400000', to_buyer: '420000' })] };
+    };
+    try {
+      const deps = { chain: auto, stateDir: mkdtempSync(join(tmpdir(), 'mg-cli-')), panelUrl: base, out: (l: string) => lines.push(l) };
+      expect(await runCli(['call', `${base}/wrong?token=NEAR`, '--auto'], deps)).toBe(0);
+      expect(lines.at(-1)).toBe('refunded: refund 0.400000 USDC, stake back 0.020000, stake lost 0.000000; panel verdict for the buyer (buyer/buyer/buyer)');
+      const callId = /call (\S+) tx/.exec(lines[0]!)![1]!;
+      lines.length = 0;
+      expect(await runCli(['status', callId], deps)).toBe(0);
+      expect(lines).toEqual(['refunded: refund 0.400000 USDC, stake back 0.020000, stake lost 0.000000; panel verdict for the buyer (buyer/buyer/buyer)']);
+    } finally {
+      panelVerdict = undefined;
+    }
+  });
+
+  it('--help after any command prints the usage and exits 0, with no configuration', async () => {
+    for (const argv of [['seller', 'init', '--help'], ['dispute', '--help'], ['call', '-h'], ['help'], ['status', 'x/1', '--help']]) {
+      const lines: string[] = [];
+      expect(await runCli(argv, { chain: undefined as never, stateDir: mkdtempSync(join(tmpdir(), 'mg-cli-')), out: (l) => lines.push(l) })).toBe(0);
+      expect(lines.join('\n')).toMatch(/^usage: certo .*\n.*seller init --bond B --terms FILE/s);
+    }
+    const log = console.log;
+    console.log = () => undefined;
+    try {
+      expect(await main(['seller', 'init', '--help'], {})).toBe(0);
+      expect(await main(['status', '--help'], {})).toBe(0);
+    } finally {
+      console.log = log;
+    }
+  });
+});
+
+describe('call records are scoped by network and contract', () => {
+  it('default state dir: $CERTO_HOME/calls/<NEAR_NETWORK>/<CERTO_CONTRACT>; CERTO_STATE_DIR wins', () => {
+    expect(defaultStateDir({ CERTO_HOME: '/h', NEAR_NETWORK: 'sandbox', CERTO_CONTRACT: 'certo' })).toBe('/h/calls/sandbox/certo');
+    expect(defaultStateDir({ CERTO_HOME: '/h', NEAR_NETWORK: 'testnet', CERTO_CONTRACT: 'v1.certo.testnet' })).toBe('/h/calls/testnet/v1.certo.testnet');
+    expect(defaultStateDir({ CERTO_HOME: '/h', CERTO_STATE_DIR: '/s' })).toBe('/s');
+  });
+
+  it('a record from another contract is not reported: the call is unknown here', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'certo-home-'));
+    const old = new CertoClient({ chain: buyerChain, store: new FileCallStore(defaultStateDir({ CERTO_HOME: home, NEAR_NETWORK: 'sandbox', CERTO_CONTRACT: 'old' })) });
+    const r = await old.call(`${base}/good?token=OLD`);
+    chain.calls.delete(r.callId);
+    expect((await old.status(r.callId)).state).toBe('released');
+    const fresh = new CertoClient({ chain: buyerChain, store: new FileCallStore(defaultStateDir({ CERTO_HOME: home, NEAR_NETWORK: 'sandbox', CERTO_CONTRACT: 'certo' })) });
+    expect((await fresh.status(r.callId)).state).toBe('unknown');
+  });
+});
 /** A clock `ahead` ms after the fake chain's time; sleeping advances it. */
 const fakeClock = (ahead = 0): Clock => { let t = chain.now + ahead; return { now: () => t, sleep: async (ms) => { t += ms; } }; };
 
@@ -289,6 +358,46 @@ describe('persistence and follow-through', () => {
     const call = chain.calls.get(r.callId)!;
     call.status = 'Open'; call.dispute = null; // what `cure` does
     expect((await disputeAndSettle(c, r.callId)).progress).toMatchObject({ state: 'final', outcome: { result: 'cured', stakeBack: '20000', refund: '0' } });
+  });
+
+  it('a replay panel without a recording (HTTP 424): no_panel at once, then the timeout rule after the panel deadline', async () => {
+    const store = new FileCallStore(mkdtempSync(join(tmpdir(), 'certo-store-')));
+    const clock = fakeClock(1000);
+    const c = new CertoClient({ chain: buyerChain, store, clock });
+    const r = await c.call(`${base}/wrong?token=NEAR`);
+    await c.dispute(r, { offerBps: 5000 });
+    await chain.as(SELLER).answer(r.callId, 0);
+    panelStatus = 424;
+    panelVerdict = () => ({ error: 'no recording for this case (sha256 ab); set NEARAI_API_KEY to ask the live panel' });
+    panelHits = 0;
+    try {
+      const t0 = clock.now();
+      const p = await c.settle(r.callId, { panelUrl: base }); // default wait 90 s
+      expect(clock.now()).toBe(t0); // returned without waiting
+      expect(p).toMatchObject({ state: 'no_panel', status: 'Answered', nextDeadlineMs: chain.now + 300_000 });
+      expect(p.state === 'no_panel' && p.detail).toMatch(new RegExp(
+        `no recording for this case.*NEARAI_API_KEY.*panel-timeout rule settles this call at ${new Date(chain.now + 300_000).toISOString()}: `
+        + "it pays the seller's offer of 0% \\(0\\.000000 USDC\\) and returns your stake \\(0\\.020000 USDC\\)"));
+      // asked again before the deadline: the same answer at once
+      expect((await disputeAndSettle(c, r.callId, { panelUrl: base })).progress.state).toBe('no_panel');
+      expect(panelHits).toBe(2);
+      // after the panel deadline: no panel, resolve_default with the sealed offer revealed
+      const sent: unknown[] = [];
+      const late = Object.assign(chain.as(BUYER), {
+        resolveDefault: async (a: { call_id: string }) => {
+          sent.push(a);
+          chain.calls.delete(a.call_id);
+          return { txHash: 'tx-default', logs: [], failures: [], events: [resolved({ call_id: a.call_id, tier: 'default', reason: 'seller_offer', refund: '0', to_buyer: '20000' })] };
+        },
+      });
+      const done = await new CertoClient({ chain: late, store, clock: fakeClock(302_000) }).settle(r.callId, { panelUrl: base });
+      expect(done).toMatchObject({ state: 'final', outcome: { result: 'not_refunded', refund: '0', stakeBack: '20000', stakeLost: '0', tier: 'default' } });
+      expect(sent).toEqual([{ call_id: r.callId, buyer_offer_bps: 5000, salt: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
+      expect(panelHits).toBe(3); // asked once more, then the rule
+    } finally {
+      panelStatus = 200;
+      panelVerdict = undefined;
+    }
   });
 
   it('status tells open, released and never paid apart', async () => {

@@ -4,9 +4,10 @@
  * Ctrl-C. `playground.env` tells `certo --playground` and
  * `certo-mcp --playground` where they are; it is deleted on exit.
  */
-import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { defaultStateDir } from '@certo/buyer';
 
 /** `CERTO_HOME`, default `~/.certo`. */
 export const certoHome = (env: NodeJS.ProcessEnv = process.env) => env.CERTO_HOME || join(homedir(), '.certo');
@@ -42,11 +43,23 @@ export function playgroundEnv(p: PlaygroundInfo): string {
     Object.entries(vars).map(([k, v]) => `${k}=${v}`).join('\n')}\n`;
 }
 
-/** Write the env file (mode 600) and delete it when this process exits. Returns its path. */
+/** Where `certo --playground` and `certo-mcp --playground` keep call records for this sandbox (next to the env file). */
+export const playgroundStateDir = (p: Pick<PlaygroundInfo, 'contract'>, path = playgroundEnvPath()) =>
+  defaultStateDir({ CERTO_HOME: dirname(path), NEAR_NETWORK: 'sandbox', CERTO_CONTRACT: p.contract });
+
+/**
+ * Write the env file (mode 600) and delete it when this process exits. Returns its path. The call records of
+ * the sandbox's contract are cleared at both ends: a new sandbox has never seen the calls of an earlier one.
+ */
 export function writePlaygroundEnv(p: PlaygroundInfo, path = playgroundEnvPath()): string {
+  const calls = playgroundStateDir(p, path);
+  rmSync(calls, { recursive: true, force: true });
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, playgroundEnv(p), { mode: 0o600 });
-  process.once('exit', () => { if (existsSync(path)) unlinkSync(path); });
+  process.once('exit', () => {
+    if (existsSync(path)) unlinkSync(path);
+    rmSync(calls, { recursive: true, force: true });
+  });
   return path;
 }
 
