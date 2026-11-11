@@ -17,7 +17,7 @@ Node ≥ 20 on macOS arm64 or Linux x86-64. No keys, no accounts, no Rust. The f
 
 ```sh
 npm ci
-make demo      # five scenes on a local NEAR sandbox; page at http://localhost:4020 while it runs
+make demo      # five scenes on a local NEAR sandbox (the page at http://localhost:4020 is up while it runs; `make playground` keeps it up)
 make guards    # nine attacks: each rejected by the real contract, each succeeds on a build with that one check removed
 ```
 
@@ -51,11 +51,11 @@ claude mcp add certo -- npx certo-mcp --playground   # from this repo; Codex: co
 
 | # | Tool call | Expect in the result (measured 2026-11-11) |
 |---|---|---|
-| 1 | `certo_quote {"url": "http://127.0.0.1:4031/v1/holders?token=NEAR&top=5"}` | nothing paid; `price_usdc "0.400000"`, `refund_window_s 120`, `dispute_stake_usdc "0.020000"`, `seller_record.bond_usdc "49.160000"`, `lost_disputes 2`, the seller's terms |
+| 1 | `certo_quote {"url": "http://127.0.0.1:4031/v1/holders?token=NEAR&top=5"}` | nothing paid; `price_usdc "0.400000"`, `refund_window_s 120`, `dispute_stake_usdc "0.020000"`, `seller_record.bond_usdc "49.160000"` and `lost_disputes 2` on a fresh playground (after the five scenes), the seller's terms |
 | 2 | `certo_call {"url": <same>}` | `http_status 200`, `receipt_verified true`, a `call_id`, a body whose `token` is `"NEO"`, `suggested.action "dispute"` |
 | 3 | `certo_dispute {"call_id": <from 2>}` | in one call: `outcome.result "refunded"`, `refund_usdc "0.400000"`, `stake_back_usdc "0.020000"`, `tier "panel"`, `votes ["buyer","buyer","buyer"]`, the `resolve` transaction |
 
-The three calls took 4.2 s in all against the recorded panel. `certo_status {"call_id": …}` then says `refunded`. The buyer never pays more than `CERTO_MAX_PRICE` (default 1.00 USDC) per call. From a shell: `npx certo --playground quote|call|dispute …`. Tools, units and error codes: [llms.txt](llms.txt).
+The three calls took 3–4 s in all against the recorded panel. Another query or another offer has no recording: `certo_dispute` then says `no_panel` at once and when the timeout rule will settle it (or set `NEARAI_API_KEY` for a live panel). A request a seller does not sell is refused before payment. `certo_status {"call_id": …}` then says `refunded`. The buyer never pays more than `CERTO_MAX_PRICE` (default 1.00 USDC) per call. From a shell: `npx certo --playground quote|call|dispute …`. Tools, units and error codes: [llms.txt](llms.txt).
 
 ## 1. The problem
 

@@ -160,9 +160,9 @@ Run 2026-11-11 (UTC) on `https://cloud-api.near.ai` with case B1-03, juror keys 
 
 ## Sign-off (D1)
 
-| Decision | Panel ships / repair round / rules-only |
+| Decision | **Panel ships as experimental, opt-in.** Refunds by rule are the default; a seller turns the panel on with `certo seller init --panel` (the demo sellers do). The K2 result is published in the README. Follow-up decided at the same time: a panel that splits (no majority, every ballot verified) refunds the midpoint of the two offers instead of falling to the timeout rule, so a planted line that splits the jurors no longer wins the case for its planter |
 |---|---|
 | Labels reviewed by, at | Not reviewed: the maintainer chose on 2026-11-11 to run on the labels as written, without the step-2 human review. Labels were frozen before any live run: `fixtures/killtest/` is unchanged since commit `70720fa`, and no model saw a case before that commit. Misses that look like label errors are reported as such, not relabelled |
-| Decided by, at | |
-| Verification level for T07 | |
+| Decided by, at | The maintainer, 2026-11-11 ~18:50 UTC, after run 2 |
+| Verification level for T07 | L3: `provider_tee` ed25519 over `sha256(sent body)`, verified in the contract |
 | Notes | |
