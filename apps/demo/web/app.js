@@ -73,6 +73,7 @@ function reset() {
     disputes: {}, // callId -> merged dispute
     votes: {}, // callId -> [vote]
     attacks: {}, // callId -> {real, "no-check"} (scene 5)
+    checked: {}, // callId -> [true | false] per juror: signature checked in this browser
     resolved: {},
     caseId: null,
     cd: null, // {callId, start, len}: the countdown of a rule claim, in page time
@@ -211,6 +212,7 @@ function handle(m) {
     }
     case "vote":
       (S.votes[m.callId] ??= [])[m.juror] = m;
+      checkInBrowser(m);
       break;
     case "attack":
       (S.attacks[m.callId] ??= {})[m.build] = m;
@@ -226,6 +228,7 @@ function handle(m) {
       if (m.event === "dispute_opened" && m.data?.answer_by_ms && !S.answerBy[m.data.call_id]) S.answerBy[m.data.call_id] = Number(m.data.answer_by_ms);
       break;
     case "log":
+      if (m.text === "process restarted") delete S.down[m.actor]; // the playground restarts the seller scene 4 stopped
       (S.logs[m.actor] ??= []).push(m.text);
       if (S.logs[m.actor].length > 6) S.logs[m.actor].shift();
       break;
@@ -266,6 +269,29 @@ function onResolved(m) {
     const r = Number(m.refund) > 0 ? `refund ${amt(m.refund)} · ` : "no refund · ";
     S.buyerNote[buyer] = { text: `${r}stake −${amt(stake ?? "0")} forfeited`, cls: "bad" };
   }
+}
+
+// ---------------------------------------------------------------------------
+// the page's own check of a juror ballot: ed25519 over "<model>:<sha256 prompt>:<sha256 answer>"
+// (NEAR AI provider_tee), against the key the contract was given (from fixtures/)
+// ---------------------------------------------------------------------------
+const hexBytes = (h) => Uint8Array.from(h.match(/../g) ?? [], (x) => parseInt(x, 16));
+const b64Bytes = (b) => Uint8Array.from(atob(b), (c) => c.charCodeAt(0));
+async function checkInBrowser(v) {
+  const pubkey = S.actors.jurors.find((j) => Number(j.index) === v.juror)?.pubkey;
+  if (!pubkey || !v.signature || v.responseBody === undefined || v.signatureKind !== "provider_tee" || !crypto.subtle) return;
+  const g = gen;
+  let ok = false;
+  try {
+    const enc = new TextEncoder();
+    const answer = new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(v.responseBody)));
+    const text = `${v.model}:${v.requestSha256}:${[...answer].map((x) => x.toString(16).padStart(2, "0")).join("")}`;
+    const key = await crypto.subtle.importKey("raw", hexBytes(pubkey), { name: "Ed25519" }, false, ["verify"]);
+    ok = await crypto.subtle.verify({ name: "Ed25519" }, key, b64Bytes(v.signature), enc.encode(text));
+  } catch { ok = false; } // e.g. a browser without Ed25519 in WebCrypto
+  if (g !== gen) return;
+  (S.checked[v.callId] ??= [])[v.juror] = ok;
+  renderCase();
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +354,8 @@ function renderHeader() {
     $("mode-panel").textContent = label;
     $("mode-net").textContent = m.network === "testnet" ? "Chain: NEAR testnet" : m.network === "sandbox" ? "Chain: local NEAR sandbox" : `Chain: ${m.network ?? "?"}`;
   }
-  const ns = Object.keys(S.scenes).map(Number);
+  // every scene the feed holds so far (a recorded feed: all of them), so the row does not change mid-run
+  const ns = received.filter((m) => m.kind === "scene").map((m) => Number(m.n));
   const max = Math.max(4, ...ns);
   let html = "";
   for (let n = 1; n <= max; n++) {
@@ -502,7 +529,9 @@ function renderCase() {
     if (!el) continue;
     const v = votes[j.index];
     el.className = "juror";
-    const sig = el.querySelector(".sig"), vote = el.querySelector(".vote");
+    const sig = el.querySelector(".sig"), vote = el.querySelector(".vote"), fam = el.querySelector(".family");
+    fam.textContent = `${j.family} family · own enclave`;
+    fam.title = "";
     const a = atk && (atk.real ?? atk["no-check"]);
     if (a) {
       // scene 5: the ballots as submitted, one of them edited after it was signed
@@ -519,6 +548,11 @@ function renderCase() {
       vote.innerHTML = `${esc(v.vote.toUpperCase())}<small>${v.latencyMs ? secs(v.latencyMs) : "&nbsp;"}</small>`;
       sig.className = `sig ${v.sigVerified ? "ok" : ""}`;
       sig.textContent = v.sigVerified ? "✓ signature verified by contract" : "signature not yet verified";
+      const here = S.checked[id]?.[j.index];
+      if (v.requestSha256 && here !== undefined) {
+        fam.innerHTML = `prompt <span class="mono">${esc(v.requestSha256.slice(0, 8))}</span> · <span class="${here ? "here-ok" : "here-bad"}">${here ? "✓ in this browser" : "✕ in this browser"}</span>`;
+        fam.title = `sha256 of the prompt the contract rebuilt: ${v.requestSha256}; ed25519 signature checked in this browser (WebCrypto) against ${j.pubkey}`;
+      }
     } else {
       if (panelPhase && d.sellerOfferPct !== undefined && !r) { el.classList.add("waiting"); vote.innerHTML = "deciding…<small>&nbsp;</small>"; }
       else vote.innerHTML = `<span class="idle">standing by</span><small>&nbsp;</small>`;

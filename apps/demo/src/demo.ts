@@ -8,10 +8,10 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { CertoClient, CertoError, simplePolicy, type CallResult } from '@certo/buyer';
 import {
-  HDR_PAYMENT_SIGNATURE, JURORS, PRODUCT_ID, PRODUCT_NAME, formatUsdc, receiptText, requestHash, sha256Hex, signBase64,
-  type ContractError, type ContractEvent, type TxResult,
+  HDR_PAYMENT_SIGNATURE, JURORS, PRODUCT_ID, PRODUCT_NAME, formatUsdc, receiptText, requestHash, sha256Hex, signBase64, toContractBallot,
+  type ContractError, type ContractEvent, type PanelRecording, type TxResult,
 } from '@certo/core';
-import { LiveJurors, PanelService, ReplayJurors, createPanelApp, type CaseOutcome } from '@certo/panel';
+import { LiveJurors, PanelService, ReplayJurors, createPanelApp, type CaseOutcome, type JurorSource } from '@certo/panel';
 import { Feed } from './feed.js';
 import { ForgingJurors } from './forge.js';
 import { choosePanel, loadDemo, type PanelPlan } from './fixtures.js';
@@ -149,7 +149,8 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
     kind: 'actors',
     buyers: ACCOUNTS.buyers.map((id) => ({ id, label: id })),
     sellers: ACCOUNTS.sellers.map((id) => ({ id, label: id })),
-    jurors: JURORS.map((j) => ({ index: j.index, model: j.model, name: jurorName(j.family), family: j.family })),
+    // pubkey: the key the contract checks this juror's ballots against (committed in fixtures/), for the page's own check
+    jurors: JURORS.map((j, i) => ({ index: j.index, model: j.model, name: jurorName(j.family), family: j.family, pubkey: plan.jurors[i]?.pubkey })),
   });
 
   const fx = loadDemo();
@@ -251,9 +252,15 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
       feed.emit({ kind: 'log', actor: label, text: 'process restarted' });
     }
   };
-  const jurors = plan.mode === 'live'
+  const source: JurorSource = plan.mode === 'live'
     ? new LiveJurors({ apiKey: env.NEARAI_API_KEY!, baseUrl: env.NEARAI_BASE_URL })
     : new ReplayJurors(repoFile('fixtures/panel'));
+  /** Every ballot the panel got, by sha256 of its request body: the vote events carry them for the page's own check. */
+  const ballots = new Map<string, PanelRecording>();
+  const jurors: JurorSource = {
+    mode: source.mode,
+    ask: async (model, body) => { const rec = await source.ask(model, body); ballots.set(sha256Hex(body), rec); return rec; },
+  };
   const resolverChain = clientOf(ACCOUNTS.resolver); // one client per key: scene 5 submits through it too
   const panelApp = createPanelApp(new PanelService({ chain: resolverChain, jurors }), { mode: plan.mode });
   const panelServer: Server = await new Promise((r) => { const s = panelApp.listen(0, '127.0.0.1', () => r(s)); });
@@ -330,7 +337,12 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
     // the contract accepted all three signatures in one transaction; the votes are fed one by one so the page can show them in turn
     for (const [i, v] of bv!.data.votes.entries()) {
       verifiedJurors.add(i);
-      feed.emit({ kind: 'vote', scene, callId: r.callId, juror: i, model: JURORS[i]!.model, vote: v, sigVerified: true });
+      const rec = ballots.get(outcome.request_sha256s[i] ?? '');
+      const b = rec && toContractBallot(rec);
+      feed.emit({
+        kind: 'vote', scene, callId: r.callId, juror: i, model: JURORS[i]!.model, vote: v, sigVerified: true,
+        ...(b ? { requestSha256: outcome.request_sha256s[i], responseBody: b.response_body, signature: b.signature, signatureKind: b.kind } : {}),
+      });
       await new Promise((res) => setTimeout(res, VOTE_GAP_MS));
     }
     flush(); // the resolve transaction's events (ballots_verified, dispute_resolved) follow the votes
