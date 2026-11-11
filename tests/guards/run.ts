@@ -1,7 +1,8 @@
-// `make guards` (DESIGN 4.8, T15): for each guard G1–G8, run the attack against
-// res/certo.wasm (must be rejected with the named error) and against
-// res/guards/certo_no_gN.wasm, built with that single check compiled out
-// (the same attack must succeed). Prints the table and exits 1 if any row is wrong.
+// `make guards` (DESIGN 4.8, T15): for each guard G1–G8 and G16, run the attack against
+// res/certo.wasm (must be rejected with the named error; G16: must pay only the seller's
+// offer) and against res/guards/certo_no_gN.wasm, built with that single check compiled out
+// (the same attack must succeed). Prints one line per guard as it finishes, then the table;
+// exits 1 if any row is wrong or a guard takes longer than GUARD_TIMEOUT_MS.
 //
 //   npx tsx tests/guards/run.ts [--only G1,G4]
 import {
@@ -25,7 +26,12 @@ const JUROR_KEYS = JURORS.map((j) => ed25519FromLabel(`guards:juror:${j.index}`)
 interface Guard {
   n: number;
   check: string;
+  /** Error the real contract rejects the attack with; for a guard with `held`, what the real contract does instead. */
   code: string;
+  /** For a guard that settles rather than rejects: whether the attack's transaction shows the guard held. */
+  held?(tx: TxResult): boolean;
+  /** The attack moves the chain clock: run it after the others, one build at a time. */
+  clock?: true;
   /** Runs the attack on a fresh market; returns the transaction that carries the attack and a note on its effect. */
   attack(e: Env): Promise<{ tx: TxResult; effect: () => Promise<string> }>;
 }
@@ -99,6 +105,7 @@ const resolve = (e: Env, callId: string, response: string, ballots: ContractBall
   call_id: callId, buyer_offer_bps: 10_000, salt: SALT, request_canon: CANON, response_body: response, ballots,
 }));
 
+const resolved = (tx: TxResult) => tx.events.find((x) => x.event === 'dispute_resolved')?.data ?? {};
 const winner = (tx: TxResult) => String(tx.events.find((x) => x.event === 'dispute_resolved')?.data.winner ?? '?');
 
 const GUARDS: Guard[] = [
@@ -134,7 +141,7 @@ const GUARDS: Guard[] = [
     },
   },
   {
-    n: 4, check: 'dispute window', code: 'E_WINDOW_CLOSED',
+    n: 4, check: 'dispute window', code: 'E_WINDOW_CLOSED', clock: true,
     async attack(e) {
       const { callId, tx } = await pay(e);
       must(tx, 'pay');
@@ -185,6 +192,17 @@ const GUARDS: Guard[] = [
       return { tx, effect: async () => `ballots for another prompt accepted, winner ${winner(tx)}` };
     },
   },
+  {
+    n: 16, check: 'panel timeout', code: "paid the seller's offer (0 %), stake back", clock: true,
+    held: (tx) => !tx.failures.length && resolved(tx).reason === 'seller_offer' && BigInt(String(resolved(tx).refund)) === 0n,
+    async attack(e) {
+      // an honest call disputed at 100 %; the seller answers 0 %; the buyer keeps its reveal from the panel
+      const id = await answeredDispute(e, GOOD_BODY);
+      await e.m.chain.advancePast((await e.b.getCall(id))!.dispute!.answered_at_ms + 300_000);
+      const tx = await attempt(() => e.b.resolveDefault({ call_id: id, buyer_offer_bps: 10_000, salt: SALT }));
+      return { tx, effect: async () => `buyer took ${toUnits(BigInt(String(resolved(tx).refund)))} of 0.400000 with no verdict (${String(resolved(tx).reason)})` };
+    },
+  },
 ];
 
 const toUnits = (n: bigint) => `${n / 1_000_000n}.${(n % 1_000_000n).toString().padStart(6, '0')}`;
@@ -212,14 +230,35 @@ async function runPair(chain: LocalChain, g: Guard): Promise<Row> {
   const one = async (variant: 'real' | 'weak') => {
     const e = await setup(chain, `g${g.n}-${variant}`, variant === 'real' ? WASM.certo : WASM.guard(g.n), bond, windowMs);
     const { tx, effect } = await g.attack(e);
-    const rejected = tx.failures.some((f) => f.includes(g.code));
-    if (rejected) return { rejected: true, text: `rejected ${g.code}` };
+    const rejected = g.held ? g.held(tx) : tx.failures.some((f) => f.includes(g.code));
+    if (rejected) return { rejected: true, text: g.held ? g.code : `rejected ${g.code}` };
     if (tx.failures.length) return { rejected: false, unexpected: true, text: `failed otherwise: ${tx.failures[0]!.slice(0, 120)}` };
     return { rejected: false, text: `attack succeeded: ${await effect()}` };
   };
-  const [real, weak] = await Promise.all([one('real'), one('weak')]).catch((err: Error) => [{ rejected: false, unexpected: true, text: `error: ${err.message}` }, { rejected: false, unexpected: true, text: '-' }]);
+  const both = g.clock ? (async () => [await one('real'), await one('weak')])() : Promise.all([one('real'), one('weak')]);
+  const [real, weak] = await both.catch((err: Error) => [{ rejected: false, unexpected: true, text: `error: ${err.message}` }, { rejected: false, unexpected: true, text: '-' }]);
   const ok = real.rejected && !weak.rejected && !('unexpected' in weak && weak.unexpected);
   return { g, real: real.text, weak: weak.text, ok };
+}
+
+/** A pair that has not finished by then counts as hung (normally 5 to 40 s each). */
+const GUARD_TIMEOUT_MS = 120_000;
+class GuardTimeout extends Error {}
+
+/** `runPair`, printing one progress line when it finishes; throws `GuardTimeout` after GUARD_TIMEOUT_MS. */
+async function timedPair(chain: LocalChain, g: Guard): Promise<Row> {
+  const t = Date.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const hung = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new GuardTimeout(`G${g.n} (${g.check}) did not finish within ${GUARD_TIMEOUT_MS / 1000} s`)), GUARD_TIMEOUT_MS);
+  });
+  try {
+    const row = await Promise.race([runPair(chain, g), hung]);
+    console.log(`G${g.n} ${g.check}: ${row.ok ? 'ok' : 'WRONG'} (${((Date.now() - t) / 1000).toFixed(1)} s)`);
+    return row;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const only = process.argv.includes('--only') ? new Set(process.argv[process.argv.indexOf('--only') + 1]!.split(',').map((s) => Number(s.replace(/^G/i, '')))) : null;
@@ -227,20 +266,25 @@ const selected = GUARDS.filter((g) => !only || only.has(g.n));
 const t0 = Date.now();
 const names = selected.flatMap((g) => ['real', 'weak'].flatMap((v) => [`g${g.n}-${v}`, `g${g.n}-${v}-seller`, `g${g.n}-${v}-buyer`, `g${g.n}-${v}-resolver`]));
 const chain = await LocalChain.start(['usdc', ...names]);
-let rows: Row[];
+let rows: Row[] = [];
 try {
   await chain.deploy('usdc', 'res/mock_usdc.wasm', { method: 'new', args: {} });
-  // G4 moves the chain clock forward, so it runs after the others
-  const [late, early] = [selected.filter((g) => g.n === 4), selected.filter((g) => g.n !== 4)];
-  // At most three pairs at once: with all seven in parallel, a busy machine's nearcore 2.10
-  // sandbox times out transactions (send_tx TIMEOUT_ERROR) and near-js backs off for minutes.
-  rows = [];
-  for (let i = 0; i < early.length; i += 3) rows.push(...(await Promise.all(early.slice(i, i + 3).map((g) => runPair(chain, g)))));
-  for (const g of late) rows.push(await runPair(chain, g));
+  // G4 and G16 move the chain clock forward, so they run after the others, one at a time
+  const [late, early] = [selected.filter((g) => g.clock), selected.filter((g) => !g.clock)];
+  // At most three pairs at once: with all of them in parallel, a busy machine's nearcore 2.10
+  // sandbox times out transactions (send_tx TIMEOUT_ERROR; signAndSend bounds each one).
+  for (let i = 0; i < early.length; i += 3) rows.push(...(await Promise.all(early.slice(i, i + 3).map((g) => timedPair(chain, g)))));
+  for (const g of late) rows.push(await timedPair(chain, g));
   rows.sort((a, b) => a.g.n - b.g.n);
+} catch (err) {
+  if (!(err instanceof GuardTimeout)) throw err;
+  console.log(`\nGUARDS FAILED: ${err.message} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+  process.exitCode = 1;
 } finally {
   await chain.stop();
 }
+if (process.exitCode) process.exit();
+console.log('');
 
 const header = ['guard', 'check', 'real contract (res/certo.wasm)', 'guard removed (res/guards/certo_no_gN.wasm)', 'verdict'];
 const table = rows.map((r) => [`G${r.g.n}`, r.g.check, r.real, r.weak, r.ok ? 'rejected / succeeds-when-removed' : 'WRONG']);
