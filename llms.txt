@@ -10,8 +10,9 @@
 
 ## MCP tools (all amounts in results are USDC decimal strings, fields ending in _usdc)
 - certo_quote {url}: look without paying: price, bond, free capacity, fee, record, refund window, terms, your dispute stake. Example: {"url":"http://127.0.0.1:PORT/v1/holders?token=NEAR&top=5"}
-- certo_call {url, method?, body?, max_price?}: pay and get the body, call_id, refund_window_until. Refused above CERTO_MAX_PRICE (default 1.00 USDC). Example: {"url":"...","max_price":"0.50"}
+- certo_call {url, method?, body?, max_price?}: pay and get the body, call_id, refund_window_until. Refused above CERTO_MAX_PRICE (default 1.00 USDC). Example: {"url":"...","max_price":0.5}
 - certo_dispute {call_id, kind?, offer_pct?, wait_s?}: get money back; waits (default 90 s) and returns the final outcome with refund_usdc. Example: {"call_id":"cheapfacts/9f0c..."}
+- Playground limits: the demo sellers sell only their example URL (anything else: 404 before payment, nothing charged); the playground panel replays recorded answers and knows only a 100% content offer on the two example URLs. Any other content dispute returns at once with state "no_panel" and the time the panel-timeout rule settles it (seller's offer refunded, stake back). Set NEARAI_API_KEY before `make playground` for a live panel
 - certo_status {call_id?, seller?}: open / released (seller kept it) / in_dispute / refunded / cured / unknown (never paid from here)
 
 ## Dispute kinds
@@ -22,16 +23,17 @@
 - Stake for content/non_delivery: max(0.02 USDC, 5% of price) x your multiplier; shown as dispute_stake_usdc
 
 ## Amounts
-- Inputs: "0.40", "1 USDC" or a JSON number are USDC; a bare integer string ("400000") is base units (6 decimals)
+- Inputs: a JSON number (0.4, 5), "0.40" or "1 USDC" are USDC; a bare integer string ("400000") is base units (6 decimals)
 
 ## Error codes and what to do
-- Nothing paid: PRICE_TOO_HIGH (raise max_price only if worth it), WOULD_NOT_FIT (seller bond full; retry later), NOT_PROTECTED / NO_SCHEME (not a Certo endpoint), WRONG_CONTRACT, SELLER_UNKNOWN, TERMS_UNKNOWN, PAY_FAILED (tokens returned)
+- Nothing paid: PRICE_TOO_HIGH (raise max_price only if worth it), WOULD_NOT_FIT (seller bond full; retry later), NOT_PROTECTED / NO_SCHEME (not a Certo endpoint, or a request the seller does not sell; the message quotes its answer), WRONG_CONTRACT, SELLER_UNKNOWN, TERMS_UNKNOWN, PAY_FAILED (tokens returned)
 - Paid, not delivered: TIMEOUT, NO_RECEIPT, RECEIPT_MISMATCH, BAD_RECEIPT_SIG: certo_dispute kind non_delivery with the returned call_id
 - Dispute: E_WINDOW_CLOSED (too late), E_STATUS (already disputed or settled; see certo_status), E_NO_PANEL_TERMS (use rule/error), E_RULE_NOT_BROKEN (use content), E_HTTP_STATUS (wrong kind for the status), NO_STATE (no local record of that call)
 - certo_dispute returning state "waiting": call it again with the same call_id; it continues and never opens a second dispute
+- certo_dispute returning state "no_panel": the panel cannot judge this case (no recording); nothing changes before next_deadline, then call it again to settle by the panel-timeout rule
 
 ## Configuration (instead of --playground)
-- NEAR_RPC_URL, NEAR_NETWORK, CERTO_CONTRACT, CERTO_TOKEN, BUYER_ACCOUNT, BUYER_PRIVATE_KEY, PANEL_URL, CERTO_MAX_PRICE, CERTO_STATE_DIR (default ~/.certo/calls; call records and sealed-offer salts survive restarts)
+- NEAR_RPC_URL, NEAR_NETWORK, CERTO_CONTRACT, CERTO_TOKEN, BUYER_ACCOUNT, BUYER_PRIVATE_KEY, PANEL_URL, CERTO_MAX_PRICE, CERTO_STATE_DIR (default ~/.certo/calls/<NEAR_NETWORK>/<CERTO_CONTRACT>; call records and sealed-offer salts survive restarts; `make playground` clears its sandbox's records when it starts and stops)
 
 ## Sellers
 - `npx certo seller init --bond 50 --terms terms.txt`: receipt key, register (1 NEAR deposit), terms, bond, prints the protect() snippet; see examples/seller.ts and packages/seller/README.md
