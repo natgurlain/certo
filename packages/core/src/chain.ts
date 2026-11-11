@@ -4,6 +4,7 @@ import { KeyPairSigner, type Signer } from '@near-js/signers';
 import { actionCreators } from '@near-js/transactions';
 import type { KeyPairString } from '@near-js/crypto';
 import { fromBase64, toHex } from './encode.js';
+import { base58Encode } from './signing.js';
 import { errorCode, parseEvents } from './events.js';
 import type {
   BuyerView, CallView, ContractBallot, ContractConfig, ContractEvent, JurorsView, QuoteView, SellerView, TermsView,
@@ -153,20 +154,99 @@ export interface NearChainOptions {
   signer?: Signer;
 }
 
+/** Longest `signAndSend` waits for one transaction to execute, across all its retries. */
+export const TX_TIMEOUT_MS = 60_000;
+
+/** The transaction was signed and sent but not seen executed within the time limit; it may still execute. */
+export class TxTimeoutError extends Error {
+  readonly type = 'TxTimeout';
+  constructor(readonly txHash: string, timeoutMs: number) {
+    super(`transaction ${txHash} not executed within ${timeoutMs / 1000} s; it may still execute, so check its status by hash before sending it again`);
+    this.name = 'TxTimeoutError';
+  }
+}
+
+type SendParams = { receiverId: string; actions: Parameters<Account['createTransaction']>[1]; throwOnFailure?: boolean };
+type Outcome = Awaited<ReturnType<JsonRpcProvider['sendTransactionUntil']>>;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** `p`, or a `TxTimeoutError` for `hash` once `deadline` (ms since epoch) has passed. */
+function within<T>(p: Promise<T>, deadline: number, hash: string, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new TxTimeoutError(hash, timeoutMs)), Math.max(0, deadline - Date.now()));
+  });
+  return Promise.race([p, late]).finally(() => clearTimeout(timer));
+}
+
 /**
- * `account.signAndSendTransaction`, signed and sent again (fresh block hash and nonce) when the
- * node rejects the transaction with `InvalidChain` ("parent block hash doesn't belong to the
- * current chain"). Such a transaction was never admitted, so resending cannot run it twice. The
- * nearcore 2.10.0 sandbox does this now and then with many concurrent transactions (seen in
- * `make guards`); near-js signs against the latest (`optimistic`) block.
+ * Whether the node gave no verdict on the transaction (HTTP 408 `TIMEOUT_ERROR`, 5xx, a dropped
+ * connection), as opposed to rejecting it (`InvalidChain`, `InvalidNonce`, ...), which means it
+ * was never admitted.
  */
-export async function signAndSend(account: Account, params: Parameters<Account['signAndSendTransaction']>[0], tries = 4) {
+function noVerdict(err: unknown): boolean {
+  const e = err as { cause?: unknown; type?: string; message?: string };
+  if (e?.type === 'RetriesExceeded') return true;
+  if (e?.type) return /timeout/i.test(`${e.type} ${e.message}`);
+  return [408, 500, 502, 503, 504].includes(e?.cause as number) || /timeout|fetch|ECONN|socket/i.test(String(e?.message ?? err));
+}
+
+/**
+ * Sign `params` once and send it with a bounded total time (`timeoutMs`, default
+ * `TX_TIMEOUT_MS`). Each RPC request is made once (no near-js back-off). When the node gives no
+ * verdict (the nearcore 2.10 sandbox answers `send_tx` with `TIMEOUT_ERROR` under load), the
+ * transaction's status is looked up by hash and, if the node does not know it, the **same signed
+ * bytes** are sent again: one nonce, one hash, so it can never execute twice. Past the deadline it
+ * throws `TxTimeoutError` with the hash. Only a rejection that proves the transaction was never
+ * admitted, `InvalidChain` ("parent block hash doesn't belong to the current chain", seen on the
+ * 2.10.0 sandbox with many concurrent transactions), leads to signing again (fresh block hash and
+ * nonce), at most `tries` times. With `throwOnFailure` (default) a failed execution throws.
+ */
+export async function signAndSend(account: Account, params: SendParams, o: { tries?: number; timeoutMs?: number } = {}): Promise<Outcome> {
+  const { tries = 4, timeoutMs = TX_TIMEOUT_MS } = o;
+  const deadline = Date.now() + timeoutMs;
+  const signer = account.getSigner();
+  if (!signer) throw new Error('signAndSend: the account has no signer');
+  // a provider that makes each request once; the loop below decides what to retry
+  const rpc = new JsonRpcProvider((account.provider as JsonRpcProvider).connection, { retries: 1 });
   for (let i = 1; ; i++) {
+    const tx = await within(account.createTransaction(params.receiverId, params.actions, await signer.getPublicKey()), deadline, '(not signed yet)', timeoutMs);
+    const [hashBytes, signed] = await signer.signTransaction(tx);
+    const hash = base58Encode(hashBytes);
+    let outcome: Outcome;
     try {
-      return await account.signAndSendTransaction(params);
+      outcome = await within(sendUntilExecuted(rpc, account.accountId, hash, signed, deadline), deadline, hash, timeoutMs);
     } catch (err) {
-      if (i >= tries || (err as { type?: string }).type !== 'InvalidChain') throw err;
-      await new Promise((r) => setTimeout(r, 300 * i));
+      if (i < tries && (err as { type?: string }).type === 'InvalidChain') {
+        await sleep(300 * i);
+        continue;
+      }
+      throw err;
+    }
+    const status = outcome.status as { Failure?: unknown };
+    if (params.throwOnFailure !== false && typeof status === 'object' && status.Failure) {
+      throw Object.assign(new Error(`transaction ${hash} failed: ${JSON.stringify(status.Failure)}`), { type: 'TxFailure', outcome });
+    }
+    return outcome;
+  }
+}
+
+/** Send `signed` and wait for its execution; on no verdict, look it up by hash, else resend the same bytes. */
+async function sendUntilExecuted(rpc: JsonRpcProvider, sender: string, hash: string, signed: Parameters<JsonRpcProvider['sendTransactionUntil']>[0], deadline: number): Promise<Outcome> {
+  for (let first = true; ; first = false) {
+    try {
+      if (first) return await rpc.sendTransactionUntil(signed, 'EXECUTED_OPTIMISTIC');
+      try {
+        return await rpc.txStatus(hash, sender, 'EXECUTED_OPTIMISTIC');
+      } catch (err) {
+        if (noVerdict(err)) throw err;
+        // the node does not know the transaction (dropped before admission): same bytes again
+        return await rpc.sendTransactionUntil(signed, 'EXECUTED_OPTIMISTIC');
+      }
+    } catch (err) {
+      if (!noVerdict(err) || Date.now() >= deadline) throw err;
+      await sleep(500);
     }
   }
 }

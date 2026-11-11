@@ -1,7 +1,11 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { NearCertoChain, sha256Hex, signAndSend, toBase64, fromHex } from '../src/index.js';
+import { Account } from '@near-js/accounts';
+import { KeyPair } from '@near-js/crypto';
+import { JsonRpcProvider } from '@near-js/providers';
+import { KeyPairSigner } from '@near-js/signers';
+import { NearCertoChain, sha256Hex, signAndSend, toBase64, fromHex, TxTimeoutError } from '../src/index.js';
 
 // Minimal JSON-RPC stand-in answering `query/call_function` like a NEAR node.
 const views: Record<string, (args: Record<string, unknown>) => unknown> = {
@@ -60,26 +64,81 @@ describe('NearCertoChain views (mock RPC)', () => {
   });
 });
 
-describe('signAndSend', () => {
-  const fake = (errors: Array<{ type?: string }>) => {
-    let calls = 0;
-    const account = { signAndSendTransaction: async () => { calls++; const e = errors.shift(); if (e) throw Object.assign(new Error('rpc'), e); return 'outcome'; } };
-    return { account: account as unknown as Parameters<typeof signAndSend>[0], calls: () => calls };
+describe('signAndSend (scripted RPC)', () => {
+  // A node answering access-key and block queries, and `send_tx` / `tx` from a script.
+  type Reply = { status?: number; result?: unknown; error?: unknown };
+  const OUTCOME = { status: { SuccessValue: '' }, transaction: {}, transaction_outcome: { id: 'h', outcome: { logs: [], status: { SuccessValue: '' } } }, receipts_outcome: [] };
+  const TIMEOUT: Reply = { status: 408, error: { name: 'HANDLER_ERROR', cause: { name: 'TIMEOUT_ERROR', info: {} }, code: -32000, message: 'Server error', data: 'Timeout' } };
+  const UNKNOWN: Reply = { error: { name: 'HANDLER_ERROR', cause: { name: 'UNKNOWN_TRANSACTION', info: {} }, code: -32000, message: 'Server error', data: 'Transaction doesn\'t exist' } };
+  const invalid = (e: string): Reply => ({ error: { name: 'HANDLER_ERROR', cause: { name: 'INVALID_TRANSACTION', info: {} }, code: -32000, message: 'Server error', data: { TxExecutionError: { InvalidTxError: e } } } });
+  let script: Record<'send_tx' | 'tx', Reply[]>;
+  let log: Array<{ method: string; params: Record<string, unknown> }>;
+  let rpcUrl = '';
+  let node: Server;
+  beforeAll(async () => {
+    node = createServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        const { id, method, params } = JSON.parse(body);
+        log.push({ method, params });
+        let r: Reply = { result: OUTCOME };
+        if (method === 'query') r = { result: { nonce: 7, permission: 'FullAccess', block_height: 1, block_hash: '1'.repeat(32) } };
+        else if (method === 'block') r = { result: { header: { hash: '1'.repeat(32), height: 1 } } };
+        else if (method === 'send_tx' || method === 'tx') r = script[method as 'send_tx' | 'tx'].shift() ?? r;
+        res.statusCode = r.status ?? 200;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ jsonrpc: '2.0', id, ...(r.error ? { error: r.error } : { result: r.result }) }));
+      });
+    });
+    node.listen(0);
+    await new Promise((r) => node.once('listening', r));
+    rpcUrl = `http://127.0.0.1:${(node.address() as AddressInfo).port}`;
+  });
+  afterAll(() => node.close());
+  const run = (s: Partial<typeof script>, o?: Parameters<typeof signAndSend>[2], throwOnFailure?: boolean) => {
+    script = { send_tx: [], tx: [], ...s };
+    log = [];
+    const account = new Account('b.near', new JsonRpcProvider({ url: rpcUrl }), KeyPairSigner.fromSecretKey(KeyPair.fromRandom('ed25519').toString()));
+    return signAndSend(account, { receiverId: 'mg.near', actions: [], throwOnFailure }, o);
   };
-  const params = { receiverId: 'mg.near', actions: [] };
+  const calls = (m: string) => log.filter((x) => x.method === m);
+  const signings = () => calls('block').length;
 
-  it('signs and sends again after InvalidChain', async () => {
-    const f = fake([{ type: 'InvalidChain' }, { type: 'InvalidChain' }]);
-    expect(await signAndSend(f.account, params)).toBe('outcome');
-    expect(f.calls()).toBe(3);
+  it('after a send_tx timeout looks the transaction up by hash and does not send it again', async () => {
+    expect(await run({ send_tx: [TIMEOUT], tx: [{ result: OUTCOME }] })).toEqual(OUTCOME);
+    expect([calls('send_tx').length, calls('tx').length, signings()]).toEqual([1, 1, 1]);
   });
 
-  it('does not resend after other errors, and gives up after `tries`', async () => {
-    const other = fake([{ type: 'InvalidNonce' }]);
-    await expect(signAndSend(other.account, params)).rejects.toMatchObject({ type: 'InvalidNonce' });
-    expect(other.calls()).toBe(1);
-    const stuck = fake([{ type: 'InvalidChain' }, { type: 'InvalidChain' }]);
-    await expect(signAndSend(stuck.account, params, 2)).rejects.toMatchObject({ type: 'InvalidChain' });
-    expect(stuck.calls()).toBe(2);
+  it('resends the same signed bytes when the node does not know the transaction, never re-signs', async () => {
+    expect(await run({ send_tx: [TIMEOUT, { result: OUTCOME }], tx: [UNKNOWN] })).toEqual(OUTCOME);
+    const sent = calls('send_tx').map((x) => x.params.signed_tx_base64);
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toBe(sent[0]);
+    expect(signings()).toBe(1);
+  });
+
+  it('gives up with TxTimeoutError (and the hash) after timeoutMs', async () => {
+    const t0 = Date.now();
+    const err = await run({ send_tx: Array(50).fill(TIMEOUT), tx: Array(50).fill(TIMEOUT) }, { timeoutMs: 1_500 }).catch((e) => e);
+    expect(err).toBeInstanceOf(TxTimeoutError);
+    expect(err.txHash).toMatch(/^[1-9A-HJ-NP-Za-km-z]{43,44}$/);
+    expect(Date.now() - t0).toBeLessThan(3_000);
+    expect(signings()).toBe(1);
+  });
+
+  it('signs again after InvalidChain, up to `tries`; other rejections are not resent', async () => {
+    expect(await run({ send_tx: [invalid('InvalidChain'), invalid('InvalidChain')] })).toEqual(OUTCOME);
+    expect([calls('send_tx').length, signings()]).toEqual([3, 3]);
+    await expect(run({ send_tx: [invalid('InvalidNonce')] })).rejects.toMatchObject({ type: 'InvalidNonce' });
+    expect(calls('send_tx').length).toBe(1);
+    await expect(run({ send_tx: [invalid('InvalidChain'), invalid('InvalidChain')] }, { tries: 2 })).rejects.toMatchObject({ type: 'InvalidChain' });
+    expect(calls('send_tx').length).toBe(2);
+  });
+
+  it('throws on a failed execution unless throwOnFailure is false', async () => {
+    const failed = { ...OUTCOME, status: { Failure: { ActionError: { kind: 'x' } } } };
+    await expect(run({ send_tx: [{ result: failed }] })).rejects.toMatchObject({ type: 'TxFailure' });
+    expect(await run({ send_tx: [{ result: failed }] }, undefined, false)).toEqual(failed);
   });
 });
