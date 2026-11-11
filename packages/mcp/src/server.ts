@@ -77,7 +77,8 @@ type SellerRecord = Pick<SellerView, 'bond' | 'free_capacity' | 'fee_bps' | 'lif
 function sellerJson(s: SellerRecord & { window_ms?: number }) {
   return {
     bond_usdc: usdc(s.bond), free_capacity_usdc: usdc(s.free_capacity), fee_pct: s.fee_bps / 100,
-    released_calls: s.lifetime_calls, lost_disputes: s.lifetime_losses, volume_usdc: usdc(s.lifetime_volume),
+    released_calls: s.lifetime_calls, lost_disputes: s.lifetime_losses, split_disputes: (s as { splits?: number }).splits ?? 0,
+    volume_usdc: usdc(s.lifetime_volume),
     ...(s.window_ms ? { refund_window_s: s.window_ms / 1000 } : {}),
   };
 }
@@ -100,7 +101,8 @@ export function createMcpServer(o: McpOptions): McpServer {
 
   server.registerTool(TOOL_QUOTE, {
     description: `Look at a ${PRODUCT_NAME}-bonded endpoint without paying: price, the seller's bond and free capacity (what can be refunded `
-      + 'right now), fee, record (released calls, lost disputes), refund window, the published terms a dispute is judged against, '
+      + 'right now), fee, record (released calls, lost disputes, split panels), refund window, the published terms a dispute is judged against, '
+      + 'whether content disputes go to the experimental AI panel ("panel") or are refunded by rule only, '
       + `and the stake a dispute would cost you. "payable": false lists why certo_call would refuse. ${AMOUNTS} `
       + `Errors: NOT_PROTECTED (not a Certo endpoint), NO_SCHEME, WRONG_CONTRACT (another contract than configured).${examples}`,
     inputSchema: { url: z.string().url(), method: z.string().optional(), body: z.string().optional() },
@@ -111,6 +113,7 @@ export function createMcpServer(o: McpOptions): McpServer {
         url: q.url, seller: q.seller, price_usdc: usdc(q.price), max_price_usdc: usdc(q.maxPrice), payable: q.problems.length === 0,
         problems: q.problems, fee_pct: q.feeBps / 100, refund_window_s: q.windowMs / 1000, dispute_stake_usdc: usdc(q.disputeStake),
         seller_record: q.seller_record && sellerJson(q.seller_record), terms_id: q.termsId, terms: q.terms,
+        panel: q.terms ? (q.terms.panel ? 'experimental: three AI jurors judge content disputes' : 'off: refunds by rule only') : undefined,
       });
     } catch (e) {
       return errorResult(e);
@@ -150,9 +153,11 @@ export function createMcpServer(o: McpOptions): McpServer {
   server.registerTool(TOOL_DISPUTE, {
     description: 'Get money back for a paid call and wait for the final outcome (one call is normally enough). Kinds: '
       + '"content" (default): the body is well-formed but wrong for the terms; opens a dispute with your sealed refund offer, the seller '
-      + 'answers with its own offer, then three AI jurors (NEAR AI TEE models, votes checked by the contract) pick the closer offer. '
+      + 'answers with its own offer, then an experimental panel of three AI jurors (NEAR AI TEE models, votes checked by the contract; '
+      + 'only when the seller\'s terms enable it, see "panel" in certo_quote) picks the closer offer. '
       + "Lost: your stake is forfeited, you get only the seller's offer, and your next stake doubles. Won: your offer is refunded and the "
-      + 'stake comes back. "error": the seller signed an HTTP status >= 500: full refund by rule, no stake, one transaction. '
+      + 'stake comes back. Split (no majority): only the seller\'s offer, stake back, and the split is counted on both records '
+      + '(seller_record.split_disputes). "error": the seller signed an HTTP status >= 500: full refund by rule, no stake, one transaction. '
       + '"rule": the body breaks a published rule of the terms (not JSON, missing required field, stale): full refund by rule, no stake. '
       + '"non_delivery": paid but no valid response (TIMEOUT, NO_RECEIPT, ...); the seller may cure by publishing the signed response '
       + '(you get your stake back, no refund), otherwise a full refund once its answer deadline passes. '

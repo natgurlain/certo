@@ -18,6 +18,7 @@ no_g6 = []  # bond withdrawal exposure check
 no_g7 = []  # evidence hash binding in resolve
 no_g8 = []  # prompt binding: trust a supplied request hash
 no_g16 = [] # panel timeout pays the midpoint instead of the seller's offer
+no_g17 = [] # a split panel pays the midpoint instead of the seller's offer
 
 [dependencies]
 near-sdk = "=5.28.3"

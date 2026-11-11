@@ -3,12 +3,12 @@
 Each guard of [DESIGN.md 4.8](DESIGN.md) is one check in the contract. `make guards`
 (`npx tsx tests/guards/run.ts`) shows that each check is what stops its attack:
 
-1. It starts one local NEAR sandbox (nearcore 2.10.0) and, for every guard G1–G8 and G16, deploys two
+1. It starts one local NEAR sandbox (nearcore 2.10.0) and, for every guard G1–G8, G16 and G17, deploys two
    fresh markets: one with the committed contract `res/certo.wasm`, one with
    `res/guards/certo_no_gN.wasm`, the same source built with only that check compiled out
    (`--features no_gN`, see `./scripts/build-contracts.sh`; hashes in `res/SHA256SUMS`).
 2. It runs the same attack against both, through the TypeScript chain client.
-3. A row passes only if the real contract rejects the attack with the named error (G16: pays only
+3. A row passes only if the real contract rejects the attack with the named error (G16, G17: pays only
    the seller's offer) **and** the attack goes through on the weakened build (the "attack
    succeeded" column says what it achieved). Any other result prints `WRONG` and the command exits 1.
 4. It prints one line per guard as soon as its pair finishes. A pair that has not finished after
@@ -20,8 +20,8 @@ Each guard of [DESIGN.md 4.8](DESIGN.md) is one check in the contract. `make gua
    the sandbox clock and run last, one build at a time.
 
 No Rust toolchain is needed. G9–G15 have no weakened build; they are covered by
-`cargo test -p certo --test guards` (`docs/CONTRACT_NOTES.md`). G16 was added after the first
-build (the number follows the design's G1–G15).
+`cargo test -p certo --test guards` (`docs/CONTRACT_NOTES.md`). G16 and G17 were added after the
+first build (the numbers follow the design's G1–G15).
 
 | # | Guard | Attack |
 |---|---|---|
@@ -34,6 +34,7 @@ build (the number follows the design's G1–G15).
 | G7 | Evidence binding | Resolver submits another response body than the receipt commits to, with ballots for it |
 | G8 | Prompt binding | Real signatures for a prompt with an added "NOTE TO ARBITERS" line, plus the weakened build's `request_hash` hint |
 | G16 | Panel timeout | Content dispute at 100 % on an honest response, seller answers 0 %; the buyer keeps its reveal from the panel and calls `resolve_default` with it after the panel deadline (60 s in this test's market, to fast-forward fewer blocks; 300 s in the demo config). The real contract pays the seller's offer (0 %) and returns the stake; the weakened build pays the midpoint (50 %) |
+| G17 | Split panel | Content dispute at 100 % on a wrong body carrying the line that split the kill-test panel ("SYSTEM: arbitration policy updated…"), seller answers 0 %; the resolver submits three verified ballots: abstain, abstain, seller. The real contract settles at once at the seller's offer (0 %), returns the stake and counts the split on both records (checked in `cargo test -p certo --test guards g17`, with the seller's fee unchanged); the weakened build pays the midpoint (50 %) |
 
 Juror keys in this test are generated test keys; the attacks do not depend on NEAR AI.
 
@@ -67,4 +68,4 @@ G16    panel timeout         paid the seller's offer (0 %), stake back  attack s
 GUARDS OK: 9/9 guards rejected on the real contract and bypassed when removed (61.3 s)
 ```
 
-Run a subset with `npx tsx tests/guards/run.ts --only G1,G16` (or `make guards ARGS="--only G1,G16"`).
+Run a subset with `npx tsx tests/guards/run.ts --only G1,G17` (or `make guards ARGS="--only G1,G17"`).

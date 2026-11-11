@@ -80,7 +80,7 @@ describe('sandbox e2e through certo-mcp --playground', () => {
     expect(c.getInstructions()).toContain(`cheapfacts = ${url}`);
     const q = parse(await c.callTool({ name: 'certo_quote', arguments: { url } }));
     expect(q).toMatchObject({ seller: 'cheapfacts', price_usdc: '0.400000', payable: true, dispute_stake_usdc: '0.020000',
-      seller_record: { bond_usdc: '50.000000', free_capacity_usdc: '50.000000', fee_pct: 1, lost_disputes: 0 }, terms: { text: fx.terms.text } });
+      seller_record: { bond_usdc: '50.000000', free_capacity_usdc: '50.000000', fee_pct: 1, lost_disputes: 0, split_disputes: 0 }, terms: { text: fx.terms.text } });
     const call = parse(await c.callTool({ name: 'certo_call', arguments: { url } }));
     expect(call).toMatchObject({ http_status: 200, price_usdc: '0.400000', receipt_verified: true, suggested: { action: 'dispute' } });
     expect(call.body).toBe(fx.responses.cheapfacts);
@@ -112,6 +112,7 @@ describe('sandbox e2e through certo-mcp --playground', () => {
     expect(code, lines.join('\n')).toBe(0);
     const out = lines.join('\n');
     expect(out).toMatch(/register: newseller registered, 1 NEAR deposit attached/);
+    expect(out).toMatch(/terms: v1 published, AI panel off: refunds by rule only/);
     expect(out).toMatch(/bond: deposited 50.000000 USDC/);
     expect(out).toMatch(/protect\(\{ contract: chain, seller: 'newseller', termsId: 'v1', price: '250000'/);
     expect(await m.client().getSeller('newseller')).toMatchObject({ bond: '50000000', fee_bps: 100 });
@@ -138,7 +139,7 @@ describe('sandbox e2e through certo-mcp --playground', () => {
     const srv: Server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
     try {
       const q = await new CertoClient({ chain: m.client('scout') }).quote(`http://127.0.0.1:${(srv.address() as AddressInfo).port}/v1/answer`);
-      expect(q).toMatchObject({ seller: 'newseller', price: '250000', problems: [], terms: { text: 'Returns {"answer": 42} as JSON.' } });
+      expect(q).toMatchObject({ seller: 'newseller', price: '250000', problems: [], terms: { text: 'Returns {"answer": 42} as JSON.', panel: false } });
     } finally {
       srv.close();
     }

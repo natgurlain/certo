@@ -494,10 +494,18 @@ impl World {
                 let terms = self.c.terms.get(&(c.seller.clone(), c.terms_id.clone())).unwrap().text.clone();
                 let buyer_wins = self.rng.gen_bool(0.5);
                 let third = self.rng.gen_range(0..3);
+                // one in four panels splits (buyer, seller, abstain): the seller's offer (G17)
+                let split = self.rng.gen_bool(0.25);
                 let m = &self.calls[i];
                 let ballots: Vec<Ballot> = (0..3)
                     .map(|j| {
-                        let side = if j < 2 { Some(buyer_wins) } else { [Some(true), Some(false), None][third] };
+                        let side = if split {
+                            [Some(true), Some(false), None][j]
+                        } else if j < 2 {
+                            Some(buyer_wins)
+                        } else {
+                            [Some(true), Some(false), None][third]
+                        };
                         let content = match side {
                             Some(b) if b == encode::buyer_is_x(j) => "X",
                             Some(_) => "Y",
@@ -525,7 +533,13 @@ impl World {
                 self.ctx(&acc("resolver.near"), 0);
                 self.c.resolve(id, offer, salt, canon, body, ballots);
                 self.settle_receipts();
-                self.bump(if settled { "resolve_settled" } else { "resolve_panel" });
+                self.bump(if settled {
+                    "resolve_settled"
+                } else if split {
+                    "resolve_split"
+                } else {
+                    "resolve_panel"
+                });
             }
             _ => {
                 let who: Vec<AccountId> = self
@@ -585,6 +599,7 @@ fn g13_solvency_property() {
         "cure",
         "resolve_default",
         "resolve_panel",
+        "resolve_split",
         "resolve_settled",
         "withdraw_claimable",
         "transfer_failed",

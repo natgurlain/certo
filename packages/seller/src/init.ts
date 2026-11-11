@@ -40,7 +40,7 @@ export interface SellerInitOptions {
   /** Price the snippet quotes, base units (default 0.40 USDC). */
   price?: string;
   windowMs?: number;
-  /** Allow content disputes judged by the panel (default true). */
+  /** Allow content disputes judged by the AI panel (experimental; default false: refunds by rule only). */
   panel?: boolean;
   requiredFields?: string[];
   /** Receipt-key seed file (hex); created with mode 0600 when missing. */
@@ -90,9 +90,9 @@ export async function sellerInit(chain: InitChain, o: SellerInitOptions): Promis
     out(`terms: ${termsId} already published`);
   } else {
     const tx = await chain.addTerms({
-      terms_id: termsId, text: o.termsText, required_fields: o.requiredFields ?? [], as_of_field: null, max_age_s: null, panel: o.panel ?? true,
+      terms_id: termsId, text: o.termsText, required_fields: o.requiredFields ?? [], as_of_field: null, max_age_s: null, panel: o.panel ?? false,
     });
-    out(`terms: ${termsId} published (tx ${tx.txHash})`);
+    out(`terms: ${termsId} published, AI panel ${o.panel ? 'on (experimental)' : 'off: refunds by rule only (--panel adds the experimental AI panel)'} (tx ${tx.txHash})`);
   }
 
   if (BigInt(o.bond) > 0n) {

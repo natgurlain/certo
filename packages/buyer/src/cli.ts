@@ -16,9 +16,10 @@ const USAGE = `usage: ${CLI_NAME} [--playground] <command> [args]
   dispute <call_id> [--kind content|error|rule|non_delivery] [--offer PCT] [--panel URL] [--wait S]
         open a dispute (or continue an open one) and wait up to S seconds (default 90) for the final outcome
   status <call_id>                       open / released / in dispute / refunded / unknown
-  seller init --bond B --terms FILE [--terms-id ID] [--price P] [--window S] [--no-panel] [--key-file F] [--no-bot-key]
+  seller init --bond B --terms FILE [--terms-id ID] [--price P] [--window S] [--panel] [--key-file F] [--no-bot-key]
         register as a seller (1 NEAR deposit), publish terms, deposit the bond, add the answer bot's function-call key
-        (methods answer and cure only), print the protect() snippet
+        (methods answer and cure only), print the protect() snippet; refunds by rule only unless --panel
+        (experimental: three AI jurors judge content disputes)
   low level: panel <call_id> --panel URL | claim-error <call_id> | claim-rule <call_id> | non-delivery <call_id> | resolve-default <call_id>
 amounts: "0.40" or "1 USDC" is USDC; a bare integer is base units (6 decimals); seller init --bond 50 means 50 USDC
 env: NEAR_RPC_URL, NEAR_NETWORK, CERTO_CONTRACT, CERTO_TOKEN, BUYER_ACCOUNT, BUYER_PRIVATE_KEY, CERTO_MAX_PRICE, PANEL_URL,
@@ -102,7 +103,8 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
           url: q.url, seller: q.seller, price_usdc: formatUsdc(q.price), max_price_usdc: formatUsdc(q.maxPrice), payable: q.problems.length === 0,
           problems: q.problems, fee_bps: q.feeBps, refund_window_s: q.windowMs / 1000, dispute_stake_usdc: formatUsdc(q.disputeStake),
           bond_usdc: s && formatUsdc(s.bond), free_capacity_usdc: s && formatUsdc(s.free_capacity),
-          record: s && { released_calls: s.lifetime_calls, losses: s.lifetime_losses }, terms_id: q.termsId, terms: q.terms,
+          record: s && { released_calls: s.lifetime_calls, losses: s.lifetime_losses, splits: (s as { splits?: number }).splits ?? 0 }, terms_id: q.termsId, terms: q.terms,
+          panel: q.terms ? (q.terms.panel ? 'experimental: three AI jurors judge content disputes' : 'off: refunds by rule only') : undefined,
         }, null, 2));
         return 0;
       }
@@ -183,7 +185,7 @@ async function seller(sub: string | undefined, rest: string[], deps: CliDeps, ou
   const chain = deps.sellerChain();
   await sellerInit(chain, {
     bond: bondUnits, termsText, termsId: flag(rest, 'terms-id'), price: price ? parseAmountInput(price) : undefined, windowMs,
-    panel: !rest.includes('--no-panel'),
+    panel: rest.includes('--panel'),
     keyFile: flag(rest, 'key-file') ?? join(deps.home ?? certoHome(), `seller-${chain.accountId}.receipt-key`), out,
     botKey: deps.botKeyAdder && !rest.includes('--no-bot-key')
       ? { file: join(deps.home ?? certoHome(), `seller-${chain.accountId}.bot-key`), add: deps.botKeyAdder(chain.contractId) }

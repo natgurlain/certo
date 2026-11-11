@@ -122,6 +122,7 @@ impl Contract {
             "window_ms": s.window_ms,
             "lifetime_calls": s.lifetime_calls,
             "lifetime_losses": s.lifetime_losses,
+            "splits": s.splits,
             "lifetime_volume": U128(s.lifetime_volume),
             "clean_calls_since_step": s.clean_calls_since_step,
             "clean_volume_since_step": U128(s.clean_volume_since_step),
