@@ -1,0 +1,10 @@
+{
+  "name": "@makegood/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./testing": "./src/testing.ts" },
+  "types": "./src/index.ts",
+  "scripts": { "test": "vitest run", "typecheck": "tsc -p tsconfig.json" },
+  "dependencies": { "@near-js/accounts": "^2.5.1", "@near-js/providers": "^2.5.1", "@near-js/signers": "^2.5.1", "@near-js/crypto": "^2.5.1", "@near-js/types": "^2.5.1", "@near-js/transactions": "^2.5.1" }
+}

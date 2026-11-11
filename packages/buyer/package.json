@@ -1,0 +1,26 @@
+{
+  "name": "@makegood/buyer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "bin": {
+    "makegood": "./bin/makegood.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@makegood/core": "0.1.0",
+    "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "@makegood/seller": "0.1.0",
+    "express": "^5.1.0",
+    "@types/express": "^5.0.0"
+  }
+}

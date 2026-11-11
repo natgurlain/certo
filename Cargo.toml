@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["contracts/makegood", "contracts/mock-usdc"]
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
+
+# Faster native tests (the G13 property test signs and verifies thousands of ed25519 messages).
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

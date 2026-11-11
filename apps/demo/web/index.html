@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>demo</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage">
+  <header class="top">
+    <div class="brand">
+      <div class="brand-name" data-brand="name"></div>
+      <div class="brand-tagline" data-brand="tagline"></div>
+    </div>
+    <ol class="scenes" id="scenes"></ol>
+    <div class="mode" id="mode">
+      <div class="mode-panel" id="mode-panel">waiting for the demo runner…</div>
+      <div class="mode-net" id="mode-net"></div>
+    </div>
+  </header>
+
+  <div class="caption" id="caption"><span id="caption-text">Connecting to the demo feed…</span></div>
+
+  <main class="lanes">
+    <section class="lane lane-buyer">
+      <h2>Buyer agents</h2>
+      <div id="buyers" class="cards"></div>
+      <div id="call" class="callbox"></div>
+    </section>
+    <section class="lane lane-seller">
+      <h2>Sellers</h2>
+      <div id="sellers" class="cards"></div>
+    </section>
+    <section class="lane lane-panel">
+      <h2>Panel <span class="h2-note">three model families, three enclaves</span></h2>
+      <div id="case" class="case"></div>
+      <div id="jurors" class="jurors"></div>
+      <div id="result" class="result"></div>
+    </section>
+  </main>
+
+  <footer class="bottom">
+    <div class="chain">
+      <div class="chain-label">Last contract event</div>
+      <div class="chain-line"><span id="chain-event" class="chain-event">—</span><span id="chain-data" class="chain-data"></span></div>
+      <div class="chain-tx"><span class="chain-label">tx</span> <span id="chain-tx" class="mono"></span></div>
+    </div>
+    <div class="done" id="done"></div>
+  </footer>
+
+  <div id="intro" class="overlay intro"><p data-brand="intro"></p></div>
+  <div id="endcard" class="overlay endcard hidden">
+    <div class="end-name" data-brand="name"></div>
+    <div class="end-line" data-brand="endline"></div>
+    <div class="end-repo" data-brand="repo"></div>
+    <div class="end-built" data-brand="built"></div>
+  </div>
+  <div id="flyers"></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

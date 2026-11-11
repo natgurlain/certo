@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "epoch": 1,
+  "fetched_at": "2026-11-10T23:02:16.461Z",
+  "source": "https://cloud-api.near.ai/v1/attestation/report?model=<id>&provider=near&nonce=<64 hex>&signing_algo=ed25519&include_tls_fingerprint=false (header x-no-aliasing: true)",
+  "signing_algo": "ed25519",
+  "binding_check": "TDX REPORTDATA = public key (32 bytes) || nonce (32 bytes); quote signature and certificate chains NOT verified (docs/VERIFY.md)",
+  "gateway": {
+    "public_key": "40599fb284f43953bb356b09080fd803c960fc10285ad90eca462ca711ad4acb",
+    "report_path": "fixtures/attestations/2026-11-10/Qwen__Qwen3.8-27B.json",
+    "report_pointer": "/gateway_attestation",
+    "report_sha256": "a49aac47afed5c37b64d07c105e9b8eb43e86e5aacd8052131494ebc9f2e70c2",
+    "nonce": "feb213da81f8ad1620c03ec307f7ae70760bc062e30999e80b799c28b2b02758",
+    "binding_ok": true
+  },
+  "jurors": [
+    {
+      "index": 0,
+      "model": "Qwen/Qwen3.8-27B",
+      "buyer_letter": "X",
+      "public_key": "89154a43a47684742c3d1753252bb6f49f61da9d8c84fc9b1def2df130cb2d93",
+      "report_path": "fixtures/attestations/2026-11-10/Qwen__Qwen3.8-27B.json",
+      "report_sha256": "a49aac47afed5c37b64d07c105e9b8eb43e86e5aacd8052131494ebc9f2e70c2",
+      "report_bytes": 165006,
+      "nonce": "feb213da81f8ad1620c03ec307f7ae70760bc062e30999e80b799c28b2b02758",
+      "binding_ok": true,
+      "fetch_ms": 7068
+    },
+    {
+      "index": 1,
+      "model": "z-ai/glm-5.3-flash",
+      "buyer_letter": "Y",
+      "public_key": "5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff",
+      "report_path": "fixtures/attestations/2026-11-10/z-ai__glm-5.3-flash.json",
+      "report_sha256": "2a69d8d4ff529ee4f22580764322112187ca3a74074e806b045844223c124f64",
+      "report_bytes": 287328,
+      "nonce": "4c0c3b4d18b2686bc6a01f32a305aa78735147e4a63e27b3f5442777fd091bd4",
+      "binding_ok": true,
+      "fetch_ms": 9435
+    },
+    {
+      "index": 2,
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "buyer_letter": "X",
+      "public_key": "236f5a6b91dd47dc3b7b36e43d4eb531a042ffb8f8fbf3a1555b78cef4fdda4c",
+      "report_path": "fixtures/attestations/2026-11-10/deepseek-ai__DeepSeek-V4.1-Flash-1017.json",
+      "report_sha256": "30ab51693d2c58d8162c3856e854577fe2869ab0cc0367d1af4a78a224dc50cd",
+      "report_bytes": 304291,
+      "nonce": "4b49e9caac4f726be877c2f311b163222bbe1d9ab09ad705ccba9bf4a716f5dd",
+      "binding_ok": true,
+      "fetch_ms": 9211
+    }
+  ],
+  "previous_epochs": []
+}

@@ -1,0 +1,5 @@
+{
+  "id": "holders-v1",
+  "text": "Returns the top N holders of the token named in the request, as JSON with fields: token (the requested symbol), as_of (Unix seconds), total_holders (integer), holders (array of exactly N objects with rank 1..N, address, balance, share_pct). Holders are sorted by balance, largest first. share_pct values are between 0 and 100 and their sum is at most 100. Refund: 100 percent for a wrong token, placeholder or invented data, an error message, or inconsistent figures; 20 percent for each holder row that is missing or invalid.",
+  "rules": { "required_fields": ["token", "as_of", "total_holders", "holders"], "as_of_field": "as_of", "max_age_s": 600 }
+}

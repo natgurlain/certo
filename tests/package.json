@@ -1,0 +1,17 @@
+{
+  "name": "@makegood/tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "guards": "tsx guards/run.ts"
+  },
+  "dependencies": {
+    "@makegood/core": "0.1.0",
+    "@makegood/buyer": "0.1.0",
+    "@makegood/seller": "0.1.0",
+    "@makegood/panel": "0.1.0",
+    "@makegood/demo": "0.1.0"
+  }
+}
