@@ -230,3 +230,5 @@ label, .label { font-size: 18px; color: var(--muted); display: block; }
 .flash { animation: flash 1.6s ease-out; }
 @keyframes flash { 0% { background-color: rgba(255,209,102,.45); } 100% { background-color: transparent; } }
 @keyframes pulse { 50% { opacity: .45; } }
+/* make playground: a third buyer card (the judge's agent); the inactive cards drop their log lines so the paid call stays in view */
+#buyers:has(.buyer:nth-child(3)) .buyer.dim .log { display: none; }
