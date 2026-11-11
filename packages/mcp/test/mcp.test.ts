@@ -9,7 +9,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ed25519FromLabel, toHex } from '@certo/core';
+import { ContractError, ed25519FromLabel, toHex } from '@certo/core';
 import { FakeChain } from '@certo/core/testing';
 import { protect } from '@certo/seller';
 import { CertoClient, FileCallStore } from '@certo/buyer';
@@ -22,15 +22,17 @@ chain.addSeller(SELLER, toHex(key.publicKey));
 chain.addTermsFor(SELLER, 'holders-v1', 'terms');
 const app = express();
 app.get('/v1/holders', protect({ contract: chain, seller: SELLER, termsId: 'holders-v1', price: '400000', receiptKey: key }), (_q, r) => void r.json({ token: 'NEO' }));
+// a replay panel without a recording of the case
+app.post('/cases', (_q, r) => void r.status(424).json({ error: 'no recording for this case (sha256 ab); set NEARAI_API_KEY to ask the live panel' }));
 let base = '';
 let server: ReturnType<typeof app.listen>;
 const stateDir = mkdtempSync(join(tmpdir(), 'certo-mcp-'));
 const BIN = fileURLToPath(new URL('../bin/certo-mcp.js', import.meta.url));
 
-async function connect(): Promise<Client> {
+async function connect(o: { panelUrl?: string; chain?: CertoClient['chain'] } = {}): Promise<Client> {
   const mcp = createMcpServer({
-    client: new CertoClient({ chain: chain.as('scout.test.near'), store: new FileCallStore(stateDir) }),
-    examples: [{ name: 'cheapfacts', url: `${base}/v1/holders?token=NEAR` }],
+    client: new CertoClient({ chain: o.chain ?? chain.as('scout.test.near'), store: new FileCallStore(stateDir) }),
+    examples: [{ name: 'cheapfacts', url: `${base}/v1/holders?token=NEAR` }], panelUrl: o.panelUrl,
   });
   const [a, b] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'test', version: '0' });
@@ -94,6 +96,47 @@ describe('MCP server', () => {
     expect(parse(d)).toMatchObject({ error: 'NO_STATE' });
     const st = parse(await client.callTool({ name: TOOL_STATUS, arguments: { call_id: 'nope/1' } }));
     expect(st).toMatchObject({ state: 'unknown', detail: expect.stringMatching(/never paid/) });
+  });
+
+  it('a JSON number for max_price is USDC', async () => {
+    const url = `${base}/v1/holders?token=NEAR&n=1`;
+    const ok = parse(await client.callTool({ name: TOOL_CALL, arguments: { url, max_price: 5 } }));
+    expect(ok).toMatchObject({ http_status: 200, price_usdc: '0.400000' });
+    const low = await client.callTool({ name: TOOL_CALL, arguments: { url, max_price: 0.39 } });
+    expect(parse(low)).toMatchObject({ error: 'PRICE_TOO_HIGH', message: expect.stringMatching(/above the cap 0\.390000 USDC/) });
+  });
+
+  it('a dispute the panel has no recording for returns at once with state no_panel and when the timeout rule settles it', async () => {
+    const c = await connect({ panelUrl: base });
+    const was = chain.now;
+    chain.now = Date.now(); // the server's clock is real: the panel deadline must lie ahead of it
+    try {
+      const r = parse(await c.callTool({ name: TOOL_CALL, arguments: { url: `${base}/v1/holders?token=NEAR&n=2` } }));
+      await c.callTool({ name: TOOL_DISPUTE, arguments: { call_id: r.call_id, offer_pct: 50, wait_s: 0 } });
+      await chain.as(SELLER).answer(r.call_id, 0);
+      const t0 = Date.now();
+      const d = parse(await c.callTool({ name: TOOL_DISPUTE, arguments: { call_id: r.call_id } })); // default wait 90 s
+      expect(Date.now() - t0).toBeLessThan(2000);
+      expect(d).toMatchObject({ state: 'no_panel', chain_status: 'Answered', next_deadline: new Date(chain.now + 300_000).toISOString() });
+      expect(d.detail).toMatch(/no recording for this case.*NEARAI_API_KEY.*seller's offer of 0% \(0\.000000 USDC\) and returns your stake \(0\.020000 USDC\)/);
+      expect(d.next).toMatch(/after it, call certo_dispute again/);
+    } finally {
+      chain.now = was;
+      await c.close();
+    }
+  });
+
+  it('a contract rejection names its code, not the raw RPC JSON', async () => {
+    const raw = 'claim_error failed: {"ActionError":{"index":0,"kind":{"FunctionCallError":{"ExecutionError":"Smart contract panicked: E_HTTP_STATUS"}}}}';
+    const c = await connect({ chain: Object.assign(chain.as('scout.test.near'), { claimError: async () => { throw new ContractError(raw, 'E_HTTP_STATUS'); } }) });
+    try {
+      const r = parse(await c.callTool({ name: TOOL_CALL, arguments: { url: `${base}/v1/holders?token=NEAR&n=3` } }));
+      const e = parse(await c.callTool({ name: TOOL_DISPUTE, arguments: { call_id: r.call_id, kind: 'error' } }));
+      expect(e).toMatchObject({ error: 'E_HTTP_STATUS', message: 'claim_error failed: E_HTTP_STATUS', contract_code: 'E_HTTP_STATUS',
+        what_to_do: expect.stringMatching(/kind "error" needs a signed status >= 500/) });
+    } finally {
+      await c.close();
+    }
   });
 });
 

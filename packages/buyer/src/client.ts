@@ -1,7 +1,7 @@
 import {
   callIdOf, decodeHeader, DEFAULT_MAX_PRICE, encodeHeader, errorCode, findOurRequirement, formatUsdc, fromBase64, hasEvent,
   HDR_PAYMENT_REQUIRED, HDR_PAYMENT_RESPONSE, HDR_PAYMENT_SIGNATURE, newSalt, offerCommit, parseAmountInput, receiptText,
-  requestCanon, sha256Hex, systemClock, toBase64, verifyBase64,
+  refundFor, requestCanon, sha256Hex, systemClock, toBase64, verifyBase64,
   type CallView, type Clock, type ContractConfig, type CertoChain, type PaymentRequired, type PaymentRequirement,
   type PaymentResponse, type PaymentSignature, type Receipt, type SellerView, type TermsView, type TxResult,
 } from '@certo/core';
@@ -29,8 +29,8 @@ export interface CallOptions {
   method?: string;
   body?: string;
   headers?: Record<string, string>;
-  /** Highest price accepted for this call: "0.40" / "1 USDC" (USDC) or "400000" (base units). Default: the client's cap. */
-  maxPrice?: string;
+  /** Highest price accepted for this call: "0.40", "1 USDC" or a number (USDC), or "400000" (base units). Default: the client's cap. */
+  maxPrice?: string | number;
 }
 
 /** A paid, delivered, receipt-checked call: everything needed for any later dispute. */
@@ -92,10 +92,15 @@ export interface QuoteInfo {
   terms: TermsView | null;
 }
 
-/** Progress of `settle`: the final outcome, or where it stands when the wait ran out. */
+/**
+ * Progress of `settle`: the final outcome, or where it stands when the wait ran out.
+ * `no_panel`: the panel service cannot judge this case (a replay panel without a recording of it, HTTP 424);
+ * nothing can happen before `nextDeadlineMs`, when the panel-timeout rule settles it.
+ */
 export type Progress =
   | { state: 'final'; outcome: Outcome }
   | { state: 'waiting'; status: CallView['status']; detail: string; nextDeadlineMs?: number }
+  | { state: 'no_panel'; status: CallView['status']; detail: string; nextDeadlineMs: number }
   | { state: 'no_dispute'; detail: string };
 
 /** `status(callId)`: on-chain record joined with what this client stored. */
@@ -153,8 +158,8 @@ export class CertoClient {
   private async requirement(url: string, init: RequestInit): Promise<PaymentRequirement> {
     const first = await this.f(url, init);
     if (first.status !== 402) {
-      await first.arrayBuffer().catch(() => undefined);
-      throw new CertoError('NOT_PROTECTED', `expected 402, got ${first.status}`);
+      const said = (await first.text().catch(() => '')).slice(0, 300);
+      throw new CertoError('NOT_PROTECTED', `expected 402, got ${first.status}${said ? `: ${said}` : ''}`);
     }
     const hdr = first.headers.get(HDR_PAYMENT_REQUIRED);
     await first.arrayBuffer().catch(() => undefined);
@@ -434,6 +439,19 @@ export class CertoClient {
             if (got) return { state: 'final', outcome: got };
             note = `; panel: ${out.reason ?? 'no verdict submitted'}`;
           } catch (e) {
+            if ((e as { status?: number }).status === 424 && now <= deadline) {
+              // a replay panel without a recording of this case: waiting cannot help, so say so now (and ask again next time)
+              this.persist(callId, { panelSent: false });
+              const bps = disp.seller_offer_bps ?? 0;
+              return {
+                state: 'no_panel', status: c.status, nextDeadlineMs: deadline,
+                detail: `the panel has no recording for this case (a replay panel only knows the recorded cases: on the playground, `
+                  + `a 100% offer on the two example URLs). For a live panel set NEARAI_API_KEY and restart it. Otherwise the `
+                  + `panel-timeout rule settles this call at ${iso(deadline)}: it pays the seller's offer of ${bps / 100}% `
+                  + `(${formatUsdc(refundFor(c.price, bps))} USDC) and returns your stake (${formatUsdc(d.stake)} USDC); `
+                  + 'run the same dispute again after that time to collect it',
+              };
+            }
             note = `; panel error: ${(e as Error).message}`;
           }
         }
@@ -505,7 +523,7 @@ export class CertoClient {
       body: JSON.stringify({ call_id: callId, buyer_offer_bps: d.offerBps, salt: d.salt, request_canon: r.requestCanon, response_body: r.body }),
     });
     const out = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(`panel answered ${res.status}: ${JSON.stringify(out)}`);
+    if (!res.ok) throw Object.assign(new Error(`panel answered ${res.status}: ${JSON.stringify(out)}`), { status: res.status });
     return out;
   }
 }

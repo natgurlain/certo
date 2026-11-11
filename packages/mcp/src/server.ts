@@ -25,14 +25,17 @@ const iso = (ms: number | undefined) => (ms ? new Date(ms).toISOString() : undef
 function errorResult(e: unknown) {
   const code = e instanceof CertoError ? e.code : undefined;
   const contractCode = (e as { contractCode?: string }).contractCode ?? (e as { code?: string }).code;
+  const raw = (e as Error).message;
+  // a contract rejection carries the RPC's raw JSON; the code says it in one word
+  const message = contractCode ? raw.replace(/\{.*\}/s, contractCode) : raw;
   return text({
-    error: code ?? (e as Error).message, message: (e as Error).message, call_id: (e as CertoError).callId, contract_code: contractCode,
+    error: code ?? contractCode ?? message, message, call_id: (e as CertoError).callId, contract_code: contractCode,
     what_to_do: helpFor(code, contractCode),
   }, true);
 }
 
 const AMOUNTS = 'All amounts in results are USDC decimal strings (fields ending in _usdc).';
-const AMOUNT_IN = 'USDC, e.g. "0.50" or "1 USDC" (a bare integer string such as "500000" is read as base units, 6 decimals)';
+const AMOUNT_IN = 'USDC, e.g. 0.5, "0.50" or "1 USDC" (a JSON number is USDC; a bare integer string such as "500000" is read as base units, 6 decimals)';
 const STAKE = 'A dispute (kinds content and non_delivery) locks a stake: max(0.02 USDC, 5% of the price) x your multiplier '
   + '(x2 after each lost content dispute, up to x16; a win halves it); dispute_stake_usdc in certo_quote and certo_call is your exact figure.';
 
@@ -46,6 +49,12 @@ function outcomeJson(o: Outcome) {
 function progressJson(p: Progress) {
   if (p.state === 'final') return { state: 'final', outcome: outcomeJson(p.outcome) };
   if (p.state === 'no_dispute') return { state: 'no_dispute', detail: p.detail };
+  if (p.state === 'no_panel') {
+    return {
+      state: 'no_panel', chain_status: p.status, detail: p.detail, next_deadline: iso(p.nextDeadlineMs),
+      next: 'nothing changes before next_deadline; after it, call certo_dispute again with the same call_id to settle by the panel-timeout rule',
+    };
+  }
   return {
     state: 'waiting', chain_status: p.status, detail: p.detail, next_deadline: iso(p.nextDeadlineMs),
     next: 'call certo_dispute again with the same call_id to keep waiting (it does not open a second dispute), or certo_status to look',
@@ -125,7 +134,7 @@ export function createMcpServer(o: McpOptions): McpServer {
     },
   }, async (a) => {
     try {
-      const r = await c.call(a.url, { method: a.method, body: a.body, maxPrice: a.max_price === undefined ? undefined : String(a.max_price) });
+      const r = await c.call(a.url, { method: a.method, body: a.body, maxPrice: a.max_price });
       const [view, stake] = await Promise.all([c.chain.getCall(r.callId).catch(() => null), c.stakeFor(r.seller, r.price).catch(() => undefined)]);
       return text({
         call_id: r.callId, http_status: r.status, price_usdc: usdc(r.price), pay_tx: r.payTx, receipt_verified: true,
@@ -148,9 +157,12 @@ export function createMcpServer(o: McpOptions): McpServer {
       + '"non_delivery": paid but no valid response (TIMEOUT, NO_RECEIPT, ...); the seller may cure by publishing the signed response '
       + '(you get your stake back, no refund), otherwise a full refund once its answer deadline passes. '
       + `${STAKE} Timing: the seller has a short answer deadline (5 s on the playground); the panel then decides in seconds; `
-      + 'without a verdict the contract default applies after the panel deadline (300 s on the playground). The tool waits up to wait_s '
-      + '(default 90) and calls resolve_default itself when a deadline passes; if still open it returns state "waiting": call it again '
-      + `with the same call_id to continue. Calls made before a restart work: records and sealed-offer salts persist on disk. ${AMOUNTS} `
+      + "without a verdict the panel-timeout rule applies after the panel deadline (300 s on the playground): the seller's offer is "
+      + 'refunded and your stake returned. The tool waits up to wait_s (default 90) and calls resolve_default itself when a deadline '
+      + 'passes; if still open it returns state "waiting": call it again with the same call_id to continue. The playground panel replays '
+      + 'recorded answers and knows only a 100% offer on its two example URLs; for any other case it returns at once with state '
+      + '"no_panel" and the time the timeout rule settles it. Calls made before a restart work: records and sealed-offer salts '
+      + `persist on disk. ${AMOUNTS} `
       + 'Errors: NO_STATE (no record of that call here), E_WINDOW_CLOSED (too late), E_STATUS (already disputed or settled), '
       + 'E_NO_PANEL_TERMS (terms allow no content dispute), E_RULE_NOT_BROKEN, E_HTTP_STATUS (wrong kind for the status code).',
     inputSchema: {

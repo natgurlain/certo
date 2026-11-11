@@ -37,12 +37,13 @@ export async function disputeAndSettle(
 export function describeProgress(p: Progress): string {
   if (p.state === 'final') return describeOutcome(p.outcome);
   if (p.state === 'no_dispute') return p.detail;
+  if (p.state === 'no_panel') return `no panel for this case (${p.status}): ${p.detail}`;
   return `still open (${p.status}): ${p.detail}; run the same dispute command again to continue`;
 }
 
 /** What each failure code means and what to do (shown to agents with every error). */
 export const ERROR_HELP: Record<string, string> = {
-  NOT_PROTECTED: 'the URL did not answer 402 with a PAYMENT-REQUIRED header: it is not a Certo endpoint; nothing was paid',
+  NOT_PROTECTED: 'the URL did not answer 402 with a PAYMENT-REQUIRED header: not a Certo endpoint, or a request this seller does not sell (see the message); nothing was paid',
   NO_SCHEME: 'the 402 offers no certo-bonded scheme; nothing was paid',
   WRONG_CONTRACT: 'the seller wants payment to another contract or token than this client is configured for; nothing was paid',
   PRICE_TOO_HIGH: 'price above your cap; nothing was paid. Pass a higher max_price only if the call is worth it',
