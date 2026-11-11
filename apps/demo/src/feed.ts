@@ -1,11 +1,12 @@
 /**
  * Event feed of `apps/demo/EVENTS.md`: an in-memory log of JSON messages,
- * served as Server-Sent Events at `/events` (full replay on connect) next to
- * the static page in `apps/demo/web/`.
+ * served as Server-Sent Events at `/events` (full replay on connect) and as a
+ * JSON array at `/feed.json`, next to the static page in `apps/demo/web/`.
+ * `save` writes the same array to a file, which the page plays without a runner.
  */
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type Server, type ServerResponse } from 'node:http';
-import { extname, join, normalize, sep } from 'node:path';
+import { dirname, extname, join, normalize, sep } from 'node:path';
 import { repoFile } from './sandbox.js';
 
 export type FeedMessage = { kind: string; [k: string]: unknown };
@@ -28,7 +29,13 @@ export class Feed {
     for (const c of this.clients) c.write(line);
   }
 
-  /** Serve `/events` and the static page; resolves with the bound port, or null if the port is taken. */
+  /** Write the log so far as `feed.json` (a JSON array of messages) to `path`. */
+  save(path: string): void {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `[\n${this.log.map((m) => JSON.stringify(m)).join(',\n')}\n]\n`);
+  }
+
+  /** Serve `/events`, `/feed.json` and the static page; resolves with the bound port, or null if the port is taken. */
   async listen(port: number, webDir = repoFile('apps/demo/web')): Promise<number | null> {
     const root = normalize(webDir + sep);
     const server = createServer((req, res) => {
@@ -38,6 +45,11 @@ export class Feed {
         for (const m of this.log) res.write(`data: ${JSON.stringify(m)}\n\n`);
         this.clients.add(res);
         req.on('close', () => this.clients.delete(res));
+        return;
+      }
+      if (url.pathname === '/feed.json') {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+        res.end(JSON.stringify(this.log));
         return;
       }
       let rel = decodeURIComponent(url.pathname);

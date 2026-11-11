@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "demo": "tsx run.ts"
+    "demo": "tsx run.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@certo/core": "0.1.0",

@@ -46,18 +46,18 @@
       <div class="chain-line"><span id="chain-event" class="chain-event">—</span><span id="chain-data" class="chain-data"></span></div>
       <div class="chain-tx"><span class="chain-label">tx</span> <span id="chain-tx" class="mono"></span></div>
     </div>
-    <div class="done" id="done"></div>
+    <div class="done-box"><div class="done" id="done"></div><button id="replay" class="replay hidden" type="button" title="Play the run again (R)">↻ Replay</button></div>
   </footer>
 
   <div id="intro" class="overlay intro"><p data-brand="intro"></p></div>
   <div id="endcard" class="overlay endcard hidden">
     <div class="end-name" data-brand="name"></div>
     <div class="end-line" data-brand="endline"></div>
-    <div class="end-repo" data-brand="repo"></div>
+    <a class="end-repo" id="end-repo" hidden></a>
     <div class="end-built" data-brand="built"></div>
   </div>
   <div id="flyers"></div>
 </div>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

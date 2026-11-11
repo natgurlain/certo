@@ -28,6 +28,7 @@ body { font-family: var(--sans); color: var(--text); font-size: 20px; line-heigh
   position: absolute; left: 0; top: 0; width: 1920px; height: 1080px;
   transform-origin: 0 0; background: var(--bg);
   display: grid; grid-template-rows: 112px 56px 1fr 104px;
+  grid-template-columns: minmax(0, 1fr); /* long text never widens the stage */
 }
 
 /* ---------- header ---------- */
@@ -35,9 +36,9 @@ body { font-family: var(--sans); color: var(--text); font-size: 20px; line-heigh
 .brand-name { font-size: 46px; font-weight: 800; letter-spacing: -0.5px; }
 .brand-tagline { font-size: 21px; color: var(--muted); margin-top: 2px; }
 .scenes { list-style: none; margin: 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; }
-.scenes li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 2px solid transparent; color: var(--muted); min-width: 0; }
-.scenes .n { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--card-2); color: var(--text); }
-.scenes .t { font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scenes li { display: flex; align-items: center; gap: 8px; padding: 10px 10px; border-radius: 12px; background: var(--card); border: 2px solid transparent; color: var(--muted); min-width: 0; }
+.scenes .n { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--card-2); color: var(--text); }
+.scenes .t { font-size: 18px; line-height: 1.1; overflow: hidden; } /* two lines when five scenes share the row */
 .scenes li.active { border-color: var(--text); color: var(--text); }
 .scenes li.active .n { background: var(--text); color: var(--bg); }
 .scenes li.ok .n { background: var(--good); color: #062; }
@@ -54,7 +55,7 @@ body { font-family: var(--sans); color: var(--text); font-size: 20px; line-heigh
 
 /* ---------- caption ---------- */
 .caption { display: flex; align-items: center; padding: 0 32px; font-size: 25px; font-weight: 600; background: #0f1520; border-bottom: 1px solid var(--line); }
-.caption span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.caption span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 .caption.ok { color: var(--good); }
 .caption.fail { color: var(--bad); }
 
@@ -76,7 +77,7 @@ body { font-family: var(--sans); color: var(--text); font-size: 20px; line-heigh
 .lane-buyer .card.active { border-color: var(--buyer); }
 .lane-seller .card.active { border-color: var(--seller); }
 .card-head { display: flex; align-items: center; gap: 12px; height: 36px; }
-.name { font-family: var(--mono); font-size: 24px; font-weight: 700; }
+.name { font-family: var(--mono); font-size: 24px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .role { font-size: 18px; color: var(--muted); }
 .spacer { flex: 1; }
 label, .label { font-size: 18px; color: var(--muted); display: block; }
@@ -114,6 +115,8 @@ label, .label { font-size: 18px; color: var(--muted); display: block; }
 .resp mark { background: var(--bad); color: #1a0000; font-weight: 800; border-radius: 4px; padding: 0 3px; box-shadow: 0 0 0 3px rgba(255,122,122,.35); }
 .resp.none { display: grid; place-items: center; color: var(--bad); font-family: var(--sans); font-size: 26px; font-weight: 700; }
 .mismatch { color: var(--bad); font-weight: 800; font-size: 19px; }
+.wedge { font-size: 18px; color: var(--muted); margin-top: 4px; }
+.callbox > .wedge { margin-top: 0; color: var(--warn); font-weight: 700; }
 
 /* seller */
 .seller-nums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 4px; }
@@ -159,6 +162,9 @@ label, .label { font-size: 18px; color: var(--muted); display: block; }
 .juror .family { font-size: 18px; color: var(--muted); }
 .juror .sig { font-size: 18px; font-weight: 700; color: var(--muted); height: 24px; white-space: nowrap; }
 .juror .sig.ok { color: var(--good); }
+.juror .sig.bad { color: var(--bad); }
+.juror.forged { border-color: var(--bad); background: #3a1414; }
+.juror.forged .vote, .juror.forged .vote small { color: var(--bad); }
 .juror .vote { text-align: right; font-size: 28px; font-weight: 900; letter-spacing: 1px; }
 .juror .vote .idle { font-size: 20px; font-weight: 600; color: var(--muted); letter-spacing: 0; white-space: nowrap; }
 .juror .vote small { display: block; font-size: 18px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
@@ -181,6 +187,9 @@ label, .label { font-size: 18px; color: var(--muted); display: block; }
 .result .rule { font-size: 44px; font-weight: 900; color: var(--good); line-height: 1.1; }
 .result .rule-sub { font-size: 28px; font-weight: 800; color: var(--good); }
 .result .empty { color: var(--muted); font-size: 21px; }
+.result .atk-real { font-size: 40px; font-weight: 900; color: var(--bad); line-height: 1.1; font-family: var(--mono); }
+.result.attack .what { font-size: 20px; margin-top: 4px; }
+.result .atk-weak { font-size: 20px; font-weight: 700; color: var(--warn); margin-top: 10px; }
 
 /* ---------- footer ---------- */
 .bottom { display: grid; grid-template-columns: minmax(0, 1fr) 640px; gap: 24px; align-items: center; padding: 0 32px; border-top: 1px solid var(--line); background: #0d121b; }
@@ -191,7 +200,13 @@ label, .label { font-size: 18px; color: var(--muted); display: block; }
 .chain-data { font-family: var(--mono); font-size: 19px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
 .chain-tx { font-size: 19px; }
 .chain-tx .mono { font-size: 19px; color: var(--text); }
-.done { font-size: 22px; font-weight: 800; text-align: right; }
+.bottom.failed .chain-event { color: var(--bad); }
+.bottom.failed { background: #2a0f12; }
+.done-box { display: flex; align-items: center; justify-content: flex-end; gap: 16px; min-width: 0; }
+.done { font-size: 22px; font-weight: 800; text-align: right; min-width: 0; }
+.replay { flex: none; font: inherit; font-size: 20px; font-weight: 800; color: var(--text); background: var(--card-2); border: 2px solid var(--line); border-radius: 10px; padding: 8px 16px; cursor: pointer; }
+.replay:hover { border-color: var(--text); }
+.replay.hidden { display: none; }
 .done.ok { color: var(--good); }
 .done.fail { color: var(--bad); }
 
@@ -201,7 +216,8 @@ label, .label { font-size: 18px; color: var(--muted); display: block; }
 .intro p { font-size: 64px; font-weight: 700; max-width: 1300px; line-height: 1.25; margin: 0; }
 .endcard .end-name { font-size: 120px; font-weight: 900; }
 .endcard .end-line { font-size: 48px; font-weight: 600; margin-top: 12px; }
-.endcard .end-repo { font-family: var(--mono); font-size: 32px; color: var(--muted); margin-top: 40px; }
+.endcard .end-repo { font-family: var(--mono); font-size: 32px; color: var(--muted); margin-top: 40px; text-decoration: none; }
+.endcard .end-repo[hidden] { display: none; }
 .endcard .end-built { font-size: 30px; color: var(--muted); margin-top: 18px; letter-spacing: 2px; }
 
 #flyers { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
