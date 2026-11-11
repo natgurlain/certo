@@ -73,7 +73,7 @@ export function buildCase(c: CaseInput): string {
 export function buildPanelRequest(model: string, caseJson: string): string {
   return (
     `{"model":"${esc(model)}","messages":[{"role":"system","content":"${esc(SYSTEM_PROMPT)}"},` +
-    `{"role":"user","content":"${esc(caseJson)}"}],"temperature":0,"seed":7,"max_tokens":600,"stream":false}`
+    `{"role":"user","content":"${esc(caseJson)}"}],"temperature":0,"seed":7,"max_tokens":4096,"stream":false}`
   );
 }
 

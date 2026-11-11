@@ -12,12 +12,16 @@ export interface PaymentRequirement {
   asset: string;
   payTo: string;
   maxTimeoutSeconds: number;
-  extra: { seller: string; quoteId: string; termsId: string; windowMs: number; feeBps: number };
+  extra: {
+    seller: string; quoteId: string; termsId: string; windowMs: number; feeBps: number;
+    /** Where a stock x402 client can learn the scheme (repository URL; may be empty). */
+    docs?: string;
+  };
 }
 
 export interface PaymentRequired {
   x402Version: 2;
-  resource: { url: string };
+  resource: { url: string; description?: string };
   accepts: PaymentRequirement[];
 }
 

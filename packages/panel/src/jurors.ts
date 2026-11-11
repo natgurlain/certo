@@ -46,7 +46,7 @@ export interface LiveOptions {
   baseUrl?: string;
   fetch?: typeof fetch;
   clock?: Clock;
-  /** Signature fetch: tries and spacing (section 4.3: up to 5, 500 ms apart). */
+  /** Signature fetch: tries and spacing (section 4.3: up to 10, 1 s apart; DeepSeek sometimes 404s for a few seconds). */
   signatureTries?: number;
   signatureDelayMs?: number;
 }
@@ -96,10 +96,10 @@ export class LiveJurors implements JurorSource {
 
   async fetchSignature(chatId: string, model: string): Promise<NearAiSignature> {
     const url = `${this.base}/signature/${encodeURIComponent(chatId)}?model=${encodeURIComponent(model)}&signing_algo=ed25519`;
-    const tries = this.o.signatureTries ?? 5;
+    const tries = this.o.signatureTries ?? 10;
     let last = '';
     for (let i = 0; i < tries; i++) {
-      if (i > 0) await this.clock.sleep(this.o.signatureDelayMs ?? 500);
+      if (i > 0) await this.clock.sleep(this.o.signatureDelayMs ?? 1000);
       try {
         const r = await this.f(url, { headers: this.headers() });
         const body = (await r.json().catch(() => ({}))) as Partial<NearAiSignature> & { error?: unknown };
