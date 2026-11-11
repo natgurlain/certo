@@ -87,7 +87,7 @@ describe('panel request body', () => {
     const expected = JSON.stringify({
       model: 'Qwen/Qwen3.8-27B',
       messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: expectedCase }],
-      temperature: 0, seed: 7, max_tokens: 600, stream: false,
+      temperature: 0, seed: 7, max_tokens: 4096, stream: false,
     });
     const got = buildPanelRequestFor({ jurorIndex: 0, termsText: HOLDERS_TERMS, requestCanon: REQ_NEAR_TOP5, responseBody: RESP_B1_03, buyerOfferBps: 10000, sellerOfferBps: 0 });
     expect(got).toBe(expected);

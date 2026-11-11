@@ -99,8 +99,8 @@ export interface SignatureRecord {
  * response bytes kept; then the ed25519 signature with up to `tries` attempts.
  */
 export async function askJuror(apiKey: string, model: string, requestBody: string, opts: { tries?: number; gapMs?: number } = {}): Promise<Ballot> {
-  const tries = opts.tries ?? 5;
-  const gapMs = opts.gapMs ?? 500;
+  const tries = opts.tries ?? 10;
+  const gapMs = opts.gapMs ?? 1000;
   const base: Ballot = {
     model,
     chatId: null,
