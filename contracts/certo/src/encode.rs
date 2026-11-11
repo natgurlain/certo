@@ -52,7 +52,7 @@ pub fn panel_request_body(
         y / 100
     );
     format!(
-        "{{\"model\":\"{}\",\"messages\":[{{\"role\":\"system\",\"content\":\"{}\"}},{{\"role\":\"user\",\"content\":\"{}\"}}],\"temperature\":0,\"seed\":7,\"max_tokens\":600,\"stream\":false}}",
+        "{{\"model\":\"{}\",\"messages\":[{{\"role\":\"system\",\"content\":\"{}\"}},{{\"role\":\"user\",\"content\":\"{}\"}}],\"temperature\":0,\"seed\":7,\"max_tokens\":4096,\"stream\":false}}",
         esc(model_id),
         esc(SYSTEM_PROMPT),
         esc(&case)
@@ -174,7 +174,7 @@ mod tests {
         let b0 = panel_request_body(0, "m/a", "T", "GET\n/x\n", "{\"a\":1}", 10000, 0);
         let b1 = panel_request_body(1, "m/b", "T", "GET\n/x\n", "{\"a\":1}", 10000, 0);
         assert!(b0.starts_with("{\"model\":\"m/a\",\"messages\":[{\"role\":\"system\",\"content\":\"You are one of three"));
-        assert!(b0.ends_with("}\"}],\"temperature\":0,\"seed\":7,\"max_tokens\":600,\"stream\":false}"));
+        assert!(b0.ends_with("}\"}],\"temperature\":0,\"seed\":7,\"max_tokens\":4096,\"stream\":false}"));
         assert!(b0.contains("\\\"offer_X\\\":\\\"refund 100 percent of the price\\\",\\\"offer_Y\\\":\\\"refund 0 percent"));
         assert!(b1.contains("\\\"offer_X\\\":\\\"refund 0 percent of the price\\\",\\\"offer_Y\\\":\\\"refund 100 percent"));
         // evidence is escaped twice
