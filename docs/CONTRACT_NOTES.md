@@ -9,10 +9,10 @@ open. Source: `contracts/certo/src/` (`lib`, `pay`, `dispute`, `panel`,
 
 | Command | Does |
 |---|---|
-| `./scripts/build-contracts.sh` (`make build`) | Builds `res/certo.wasm`, `res/mock_usdc.wasm`, `res/guards/certo_no_g{1..8}.wasm`, writes `res/SHA256SUMS`. Local paths are remapped out of the wasm |
+| `./scripts/build-contracts.sh` (`make build`) | Builds `res/certo.wasm`, `res/mock_usdc.wasm`, `res/guards/certo_no_g{1..8,16}.wasm`, writes `res/SHA256SUMS`. Local paths are remapped out of the wasm |
 | `cargo test -p certo --lib` | Unit tests: encoders, golden vectors, fee steps, settlement table, `parse_vote`, rules, exposure, G13 property test |
 | `cargo test -p certo --test sandbox` | Sandbox tests for T06/T07/T08 against `res/*.wasm` |
-| `cargo test -p certo --test guards -- --nocapture` | G1–G15; for G1–G8 the same attack against `res/certo.wasm` and `res/guards/certo_no_gN.wasm`, printing the pair |
+| `cargo test -p certo --test guards -- --nocapture` | G1–G16; for G1–G8 and G16 the same attack against `res/certo.wasm` and `res/guards/certo_no_gN.wasm`, printing the pair |
 | `cargo test --workspace` | All of the above |
 
 Sandbox tests deploy the wasm in `res/`, so run the build script first after a
@@ -67,13 +67,32 @@ over nearcore 2.10.0's per-transaction limit of 300 TGas), and G12 disputes
 sweep at the old expiry landed ~6.5 s late, past a new expiry only ~2 s after
 the old one.
 
-One TypeScript change keeps the 2.10.0 runs stable, also behaviour-neutral:
-`signAndSend` in `packages/core/src/chain.ts` signs and sends a transaction
-again when the node answers `InvalidChain` ("Transaction parent block hash
-doesn't belong to the current chain") before admitting it: on macOS the 2.10.0
-sandbox did so in 3 of 4 `make guards` runs (3 to 7 of the 8 rows failed);
-8 of 8 runs passed after the change. The demo prints the sandbox version it
-runs.
+Two TypeScript changes keep the 2.10.0 runs stable, both behaviour-neutral, both
+in `signAndSend` in `packages/core/src/chain.ts`. (1) It signs and sends a
+transaction again when the node answers `InvalidChain` ("Transaction parent
+block hash doesn't belong to the current chain") before admitting it: on macOS
+the 2.10.0 sandbox did so in 3 of 4 `make guards` runs (3 to 7 of the 8 rows
+failed); 8 of 8 runs passed after the change. (2) Under load the sandbox answers
+`send_tx` with `TIMEOUT_ERROR` (HTTP 408), and near-js then resent the request
+with growing back-off for minutes with no output (`make guards` hung once in
+four runs). Now each RPC request is made once, a transaction has 60 s in all
+(`TX_TIMEOUT_MS`), and on a timeout the client looks the transaction up by hash
+and, if the node does not know it, resends the **same signed bytes** (one nonce,
+one hash), so it can never execute twice; past the limit it throws
+`TxTimeoutError` with the hash. The demo prints the sandbox version it runs.
+
+**Current build** (panel-timeout rule G16 and the panel request's `max_tokens`
+4096): `certo.wasm` 354,380 bytes, SHA-256 `1f6ab2b7117d47027dafca38d319de5ae1909dbf10b92b99c45f4986758f36e3`;
+it imports `sha256` and `ed25519_verify` from `env` and none of the gas-key host
+functions (checked with `wasm-dis`). Checked on macOS arm64 only, 2026-11-11:
+nearcore 2.10.0: `cargo test --workspace` 62/62 (28 unit, 15 guard, 19 sandbox),
+`make guards` 9/9 in three consecutive runs (57.0, 60.6, 60.2 s), `npm test`
+169/169 and `make demo` `DEMO OK`, the last two with synthetic panel recordings
+because the request body changed and the real ones must be re-recorded;
+nearcore 2.14.0: `cargo test --workspace` 62/62 (G12, a timing test, failed
+once in the full parallel run with other sandboxes on the machine; it then
+passed alone and in a rerun of the whole guard suite, 15/15). The Linux rows of the table were checked on the
+earlier builds below and not repeated.
 
 Verified on 2026-11-11 with the pre-rename build (`makegood.wasm` 354,412 bytes, SHA-256 `5a6a9031…`). The rename to Certo changed only brand strings; the rebuilt `certo.wasm` (354,388 bytes, SHA-256 `9e8118ad…`) was re-checked on macOS arm64 only (demo, `npm test`, `make guards`, `cargo test` on nearcore 2.10.0):
 
@@ -203,13 +222,30 @@ Events: `jurors_set`, `resolver_set`, `treasury_withdrawn`, `seller_registered`,
    `fixtures/vectors.json`.
 4. **Settlement shortcut** (`seller_offer ≥ buyer_offer`) ignores ballots; an
    empty `ballots` array is fine. The panel path needs exactly three.
-5. **`resolve_default` after the panel deadline.** A reveal that does not match
-   the commitment panics `E_COMMIT_MISMATCH` (it is not treated as "no reveal").
-   If a valid reveal is at or below the seller's offer, it settles at the buyer's
-   offer (`reason: "settled"`), as `resolve` would; otherwise midpoint rounded down
-   to 1 % (`"midpoint"`); without a reveal, the seller's offer applies and the
-   stake goes to the treasury (`"no_reveal"`). None of these changes either
-   party's record.
+5. **`resolve_default` after the panel deadline: no verdict pays the seller's
+   offer.** A reveal that does not match the commitment panics `E_COMMIT_MISMATCH`
+   (it is not treated as "no reveal"). If a valid reveal is at or below the
+   seller's offer, it settles at the buyer's offer (`reason: "settled"`), as
+   `resolve` would; otherwise the **seller's offer** is paid and the stake returned
+   (`"seller_offer"`); without a reveal, the seller's offer applies and the stake
+   goes to the treasury (`"no_reveal"`). None of these changes either party's
+   record.
+   Why: only the buyer holds its reveal, and the panel cannot rule without it. The
+   earlier rule (midpoint with a valid reveal) let a buyer dispute an honest call at
+   100 %, keep its reveal from the panel, and take 50 % of the price plus its stake
+   back after 300 s, risk-free (guard G16 shows it on the weakened build). Under the
+   new rule withholding the reveal never pays more than the seller offered. The
+   buyer can always force a verdict itself: `resolve` is open to **any** account
+   once `resolver_exclusive_ms` (60 s) has passed after the answer, and it stays
+   callable until someone calls `resolve_default`; so a buyer whose panel service is
+   down runs the three jurors with its own NEAR AI key (`npx certo resolve`) in the
+   240 s between 60 s and the 300 s deadline. A buyer who does nothing gets what the
+   seller offered and its stake back (with the reveal), no loss on its record: the
+   same as accepting the offer. The seller cannot force a panel (it lacks the
+   reveal) but gains nothing from the deadline beyond its own offer. Known residual:
+   after the deadline anyone, including the seller, may call `resolve_default`
+   without the reveal, which sends the buyer's stake to the treasury; a buyer should
+   resolve or call `resolve_default` with its reveal before 300 s.
 6. **Rule refunds.** `claim_error`, `claim_rule` and a `cure` with status ≥ 500
    refund the price, return any stake, charge no ruling fee and record a seller
    loss. Only the no-answer default (`seller_no_answer`) also charges the seller
@@ -232,13 +268,15 @@ Events: `jurors_set`, `resolver_set`, `treasury_withdrawn`, `seller_registered`,
     signature over given request and response bodies and ignores
     `accept_gateway`. `Ballot.request_hash` is accepted in JSON and ignored by the
     real contract; only `no_g8` uses it.
-14. **Guard features.** All eight `no_gN` features are built into `res/guards/`
-    (the design lists six; `no_g4` and `no_g6` cost nothing extra):
+14. **Guard features.** All nine `no_gN` features are built into `res/guards/`
+    (the design lists six; `no_g4` and `no_g6` cost nothing extra; `no_g16` was
+    added with the panel-timeout rule of item 5):
     G1 ballot signature check, G2 exposure check in `pay`, G3 status check when a
     dispute opens, G4 window check (disputes, `claim_error`, `claim_rule`), G5
     receipt signature check, G6 exposure check in `withdraw_bond`, G7 evidence
     hash check in `resolve`, G8 contract-built request hash (the weakened build
-    trusts `Ballot.request_hash`).
+    trusts `Ballot.request_hash`), G16 panel-timeout payout (the weakened build pays
+    the midpoint of the two offers with a valid reveal, as before item 5 changed).
 15. **No real NEAR AI recording exists yet.** Ballot tests sign with generated
     ed25519 keys in the exact `provider_tee` / `gateway` text format. The test
     `t07_recorded_nearai_signatures_verify_on_chain` reads every
@@ -257,5 +295,5 @@ Events: `jurors_set`, `resolver_set`, `treasury_withdrawn`, `seller_registered`,
 |---|---|---|
 | `resolve` with three `provider_tee` ballots, buyer wins, one refund transfer | 10.64 TGas | `cargo test -p certo --test sandbox t08_panel_buyer_wins -- --nocapture` (line `GAS resolve`) |
 | `resolve` with a gateway/provider_tee mix | 10.63 TGas | `… t08_gateway_ballots -- --nocapture` |
-| `ft_transfer_call` pay with payout | 11.57 TGas (11.80) | `… t06_pay_moves -- --nocapture` |
+| `ft_transfer_call` pay with payout | 11.56 TGas (11.79) | `… t06_pay_moves -- --nocapture` |
 | 600 payments from 20 concurrent buyers | 51 s wall clock (36 s) | `cargo test -p certo --test guards g9 -- --nocapture` |
