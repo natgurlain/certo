@@ -79,17 +79,17 @@ export async function sellerInit(chain: InitChain, o: SellerInitOptions): Promis
   const snippet = [
     `import { readFileSync } from 'node:fs';`,
     `import express from 'express';`,
-    `import { NearCertoChain, fromHex } from '@certo/core';`,
+    `import { chainFromEnv, fromHex } from '@certo/core';`,
     `import { createAnswerBot, protect } from '@certo/seller';`,
     ``,
-    `const chain = new NearCertoChain({ rpcUrl: process.env.NEAR_RPC_URL!, contractId: '${chain.contractId}', tokenId: '${chain.tokenId}',`,
-    `  network: '${chain.network}', accountId: '${seller}', privateKey: process.env.SELLER_PRIVATE_KEY });`,
+    `// env: NEAR_RPC_URL, NEAR_NETWORK, CERTO_CONTRACT=${chain.contractId}, CERTO_TOKEN=${chain.tokenId}, SELLER_PRIVATE_KEY`,
+    `const chain = chainFromEnv(process.env, { accountId: '${seller}', privateKey: process.env.SELLER_PRIVATE_KEY! });`,
     `const mw = protect({ contract: chain, seller: '${seller}', termsId: '${termsId}', price: '${price}', // ${formatUsdc(price)} USDC`,
     `  receiptKey: fromHex(readFileSync('${o.keyFile}', 'utf8').trim()) });`,
     `const app = express();`,
-    `app.get('/v1/answer', mw, (req, res) => void res.json({ answer: 42 }));`,
+    `app.get('/v1/answer', mw, (_req, res) => void res.json({ answer: 42 }));`,
     `app.listen(8080);`,
-    `createAnswerBot({ chain, store: mw.store }).start(1000); // answers disputes (offer 0%) and cures non-delivery claims`,
+    `createAnswerBot({ chain, store: mw.store }).start(1000); // answers disputes (offer 0%), cures non-delivery claims`,
   ].join('\n');
   out('');
   out('protect() snippet:');
