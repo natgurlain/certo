@@ -184,6 +184,7 @@ label, .label { font-size: 18px; color: var(--muted); display: block; }
 .result .score { font-size: 72px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
 .result .score .in { font-size: 40px; color: var(--muted); font-weight: 800; margin-left: 12px; }
 .result .what { font-size: 22px; font-weight: 700; margin-top: 8px; }
+.result .timing { font-size: 18px; color: var(--muted); font-weight: 700; margin-top: 6px; }
 .result.buyer .score { color: var(--buyer); }
 .result.seller .score { color: var(--seller); }
 .result .rule { font-size: 44px; font-weight: 900; color: var(--good); line-height: 1.1; }

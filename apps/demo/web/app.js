@@ -21,6 +21,8 @@ const FEED_FILE = "feed.json";
 const SCENE_SHORT = { 1: "Honest seller", 2: "Wrong token", 3: "Lying buyer", 4: "Seller down", 5: "Forged vote" };
 const AMOUNT_KEYS = new Set(["price", "fee", "stake", "refund", "ruling_fee", "amount", "bond"]);
 const DISPUTE_TYPES = new Set(["content", "non_delivery", "error", "rule"]);
+// Median time of a live panel ruling in the kill test (README, Measured). A replayed ruling takes seconds, so the page names both.
+const LIVE_PANEL_MEDIAN_S = 23;
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -582,7 +584,9 @@ function renderCase() {
     const what = r.winner === "buyer"
       ? `for the buyer · refund ${amt(r.refund)} out of the seller's bond`
       : `for the seller · ${Number(r.refund) > 0 ? `refund ${amt(r.refund)}` : "no refund"} · buyer's stake ${amt(d?.stake ?? "0")} forfeited`;
-    res.innerHTML = `<div class="score">${score}<span class="in">in ${secs(r.elapsedMs)}</span></div><div class="what">${what}</div>`;
+    const replayed = String(S.mode?.panel ?? "").startsWith("replay");
+    const note = replayed ? `<div class="timing">recorded answers; asked live, the panel takes a median of ${LIVE_PANEL_MEDIAN_S} s</div>` : "";
+    res.innerHTML = `<div class="score">${score}<span class="in">${replayed ? "replayed in" : "in"} ${secs(r.elapsedMs)}</span></div>${note}<div class="what">${what}</div>`;
   } else {
     res.className = "result";
     const answerMs = d?.answerMs ?? answerWindow(id);

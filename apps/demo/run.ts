@@ -69,6 +69,7 @@ if (!keepOpen) {
   process.exit(r.ok ? 0 : 1);
 }
 await r.reviveSellers();
+r.watchAgent();
 const pageUrl = r.port !== null ? `http://localhost:${r.port}` : null;
 if (r.world.local) {
   const chain = r.world.local.chain;

@@ -65,6 +65,8 @@ export interface DemoResult {
   exampleUrls: Record<string, string>;
   /** Restart the sellers scene 4 stopped (same port, same receipt key), e.g. for `make playground`. */
   reviveSellers(): Promise<void>;
+  /** `make playground`: from now on the buyer `agent` (the judge's MCP client) gets a card on the page once it pays. Returns a stop function. */
+  watchAgent(): () => void;
   shutdown(opts?: { keepFeed?: boolean }): Promise<void>;
 }
 
@@ -145,13 +147,16 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
   if (port !== null) print(`page and event feed: http://localhost:${port}`);
   else if (o.port !== null) print(`WARNING: port ${o.port ?? 4020} is in use; the page is not served this run (set DEMO_PORT)`);
   feed.emit({ kind: 'mode', panel: plan.mode, network, ...(plan.recordedAt && plan.mode !== 'live' ? { recordedAt: plan.recordedAt } : {}) });
-  feed.emit({
+  /** Buyers with a card on the page: the scenes' two, then `agent` once it acts in the playground. */
+  const shownBuyers: string[] = [...ACCOUNTS.buyers];
+  const emitActors = () => feed.emit({
     kind: 'actors',
-    buyers: ACCOUNTS.buyers.map((id) => ({ id, label: id })),
+    buyers: shownBuyers.map((id) => ({ id, label: id === ACCOUNTS.agent ? 'agent (you)' : id })),
     sellers: ACCOUNTS.sellers.map((id) => ({ id, label: id })),
     // pubkey: the key the contract checks this juror's ballots against (committed in fixtures/), for the page's own check
     jurors: JURORS.map((j, i) => ({ index: j.index, model: j.model, name: jurorName(j.family), family: j.family, pubkey: plan.jurors[i]?.pubkey })),
   });
+  emitActors();
 
   const fx = loadDemo();
   const terms = [{ terms_id: fx.terms.terms_id, text: fx.terms.text, panel: fx.terms.panel }];
@@ -184,7 +189,7 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
   const snapshot = () => {
     snapshotQueue = snapshotQueue.then(async () => {
       const [buyers, sellers] = await Promise.all([
-        Promise.all(ACCOUNTS.buyers.map(async (id) => [id, { balance: formatUsdc(await world.balance(world.id(id))) }] as const)),
+        Promise.all(shownBuyers.map(async (id) => [id, { balance: formatUsdc(await world.balance(world.id(id))) }] as const)),
         Promise.all(ACCOUNTS.sellers.map(async (id) => {
           const s = await viewer.getSeller(world.id(id));
           return [id, {
@@ -208,6 +213,7 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
     lastTx.set(`${signer}:${method}`, tx);
     txLog.push({ signer, method, hash: tx.txHash, ...(err ? { error: err.code ?? err.message } : {}) });
     const publish = () => {
+      agentVerdict(tx);
       for (const e of tx.events) {
         if (e.event === 'call_paid') { const s = labelOf(String(e.data.seller)); paidCalls.set(s, (paidCalls.get(s) ?? 0) + 1); }
         feed.emit({ kind: 'chain', event: e.event, data: e.data, txHash: tx.txHash });
@@ -220,6 +226,75 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
   };
 
   const clientOf = (id: string) => world.client(id, onTx(id));
+
+  // ---- make playground: the judge's buyer `agent` signs in its own process (certo-mcp), so its steps are seen
+  // where they land here: the seller that served it, the answer bot, and the resolver's verdict; its balance is polled
+  let watching = false;
+  /** The agent's calls this run: seller label and when its dispute was seen. */
+  const agentCalls = new Map<string, { seller: string; disputedAt?: number; gone?: boolean }>();
+  const showAgent = () => {
+    if (shownBuyers.includes(ACCOUNTS.agent)) return;
+    shownBuyers.push(ACCOUNTS.agent);
+    emitActors();
+  };
+  const agentPaid = async (seller: string, served: { callId: string; status: number; body: string }) => {
+    if (!watching || agentCalls.has(served.callId)) return;
+    const call = await viewer.getCall(served.callId).catch(() => null);
+    if (call?.buyer !== world.id(ACCOUNTS.agent)) return;
+    agentCalls.set(served.callId, { seller });
+    showAgent();
+    await emitCall(0, ACCOUNTS.agent, seller, { status: served.status, body: served.body } as CallResult, served.callId, mismatchOf(served.body));
+    feed.emit({ kind: 'log', actor: ACCOUNTS.agent, text: `paid ${cap(call.price)} to ${seller}: HTTP ${served.status}` });
+    await snapshot();
+  };
+  const agentAnswered = async (callId: string) => {
+    const a = agentCalls.get(callId);
+    if (!watching || !a) return;
+    const c = await viewer.getCall(callId).catch(() => null);
+    if (!c?.dispute) return;
+    a.disputedAt = Date.now();
+    feed.emit({
+      kind: 'dispute', scene: 0, callId, buyer: ACCOUNTS.agent, seller: a.seller, disputeKind: 'content', stake: formatUsdc(c.dispute.stake),
+      sellerOfferPct: (c.dispute.seller_offer_bps ?? 0) / 100,
+    });
+    feed.emit({ kind: 'log', actor: ACCOUNTS.agent, text: `disputed: stake ${cap(c.dispute.stake)}, ${a.seller} offers ${(c.dispute.seller_offer_bps ?? 0) / 100}%` });
+  };
+  /** A verdict the resolver submitted on one of the agent's calls: the votes, then the result (before the chain events, as EVENTS.md asks). */
+  function agentVerdict(tx: TxResult): void {
+    const e = tx.events.find((x) => x.event === 'dispute_resolved');
+    const callId = String(e?.data.call_id ?? '');
+    const a = agentCalls.get(callId);
+    if (!watching || !e || !a) return;
+    const votes = (tx.events.find((x) => x.event === 'ballots_verified')?.data.votes ?? []) as string[];
+    for (const [i, v] of votes.entries()) feed.emit({ kind: 'vote', scene: 0, callId, juror: i, model: JURORS[i]!.model, vote: v, sigVerified: true });
+    const refund = String(e.data.refund ?? '0');
+    const winner = (e.data.winner as string | undefined) ?? (BigInt(refund) > 0n ? 'buyer' : 'seller');
+    const b = votes.filter((v) => v === 'buyer').length;
+    feed.emit({
+      kind: 'resolved', scene: 0, callId, tier: e.data.tier, winner, refund: formatUsdc(refund),
+      ...(votes.length ? { votes: `${b}-${votes.filter((v) => v === 'seller').length}` } : {}), elapsedMs: Date.now() - (a.disputedAt ?? Date.now()),
+    });
+    agentCalls.delete(callId);
+  }
+  const watchAgent = () => {
+    watching = true;
+    let last = '';
+    const poll = setInterval(() => {
+      void world.balance(world.id(ACCOUNTS.agent)).then(async (bal) => {
+        const now = formatUsdc(bal);
+        if (last && now !== last && shownBuyers.includes(ACCOUNTS.agent)) await snapshot(); // e.g. a timeout-rule refund the agent sent itself
+        last = now;
+        for (const [callId, a] of agentCalls) {
+          if (await viewer.getCall(callId).catch(() => undefined) !== null) continue;
+          // gone twice in a row: by then a verdict of the resolver would have been seen (its transaction lands before its report)
+          if (!a.gone) { a.gone = true; continue; }
+          agentCalls.delete(callId);
+          feed.emit({ kind: 'log', actor: ACCOUNTS.agent, text: a.disputedAt ? `dispute on ${a.seller} settled without the panel (timeout rule)` : `window closed: ${a.seller} kept the payment` });
+        }
+      }).catch(() => undefined);
+    }, 2000);
+    return () => { watching = false; clearInterval(poll); };
+  };
   if (testnet) {
     const [bonds, funds] = await Promise.all([
       Promise.all(ACCOUNTS.sellers.map(async (s) => formatUsdc((await viewer.getSeller(world.id(s)))?.bond ?? '0'))),
@@ -234,12 +309,14 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
   const botLog = (seller: string) => (a: { callId: string; action: string; txHash?: string; error?: string }) => {
     if (a.error) feed.emit({ kind: 'log', actor: seller, text: `${a.action} failed: ${a.error}` });
     else feed.emit({ kind: 'log', actor: seller, text: `${a.action === 'answer' ? 'answered the dispute: offer 0%' : 'cured the claim'} (${short(a.txHash ?? '')})` });
+    if (!a.error && a.action === 'answer') void agentAnswered(a.callId);
   };
   const sellers: Record<string, DemoSeller> = {};
   const startSeller = async (label: (typeof ACCOUNTS.sellers)[number], port?: number) => {
     const s = await startDemoSeller({
       id: world.id(label), chain: clientOf(label), receiptKey: world.receiptKey(label), termsId: fx.terms.terms_id, price: fx.price,
       responses: { [fx.request]: fx.responses[label] }, offerBps: 0, onBot: botLog(label), botPollMs: testnet ? 1500 : 400, port,
+      onPaid: (served) => void agentPaid(label, served),
     });
     sellers[label] = s;
     servers.push({ close: () => s.kill() });
@@ -590,5 +667,5 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
   lines.push(summary);
   print(summary);
   const exampleUrls = Object.fromEntries(ACCOUNTS.sellers.map((s) => [s, urlOf(s)]));
-  return { ok, scenesOk, jurorsVerified: verifiedJurors.size, plan, lines, feed, port, elapsedMs: Date.now() - t0, world, panelUrl, exampleUrls, reviveSellers, shutdown };
+  return { ok, scenesOk, jurorsVerified: verifiedJurors.size, plan, lines, feed, port, elapsedMs: Date.now() - t0, world, panelUrl, exampleUrls, reviveSellers, watchAgent, shutdown };
 }
