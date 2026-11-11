@@ -79,16 +79,21 @@ four runs). Now each RPC request is made once, a transaction has 60 s in all
 (`TX_TIMEOUT_MS`), and on a timeout the client looks the transaction up by hash
 and, if the node does not know it, resends the **same signed bytes** (one nonce,
 one hash), so it can never execute twice; past the limit it throws
-`TxTimeoutError` with the hash. The demo prints the sandbox version it runs.
+`TxTimeoutError` with the hash. (3) Transactions reference the latest *final*
+block, not the optimistic head near-js uses: after the merge of 2026-11-11, 2
+of 12 full `make guards` runs had one setup transaction that the node knew but
+never executed (`tx` answered 408 for 60 s; most likely signed against a head
+that never became canonical, the same cause as `InvalidChain`). The demo prints
+the sandbox version it runs.
 
 **Current build** (panel-timeout rule G16 and the panel request's `max_tokens`
 4096): `certo.wasm` 354,380 bytes, SHA-256 `1f6ab2b7117d47027dafca38d319de5ae1909dbf10b92b99c45f4986758f36e3`;
 it imports `sha256` and `ed25519_verify` from `env` and none of the gas-key host
 functions (checked with `wasm-dis`). Checked on macOS arm64 only, 2026-11-11:
 nearcore 2.10.0: `cargo test --workspace` 62/62 (28 unit, 15 guard, 19 sandbox),
-`make guards` 9/9 in three consecutive runs (57.0, 60.6, 60.2 s), `npm test`
-169/169 and `make demo` `DEMO OK`, the last two with synthetic panel recordings
-because the request body changed and the real ones must be re-recorded;
+`make guards` 9/9 in six consecutive runs (58.2 to 62.5 s) after the merge of
+`main` and the final-block change below, `npm test` 198/198 and `make demo` `DEMO OK`
+(real demo ballots from `main`);
 nearcore 2.14.0: `cargo test --workspace` 62/62 (G12, a timing test, failed
 once in the full parallel run with other sandboxes on the machine; it then
 passed alone and in a rerun of the whole guard suite, 15/15). The Linux rows of the table were checked on the

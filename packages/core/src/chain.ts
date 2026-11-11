@@ -1,10 +1,10 @@
 import { Account } from '@near-js/accounts';
 import { JsonRpcProvider } from '@near-js/providers';
 import { KeyPairSigner, type Signer } from '@near-js/signers';
-import { actionCreators } from '@near-js/transactions';
+import { actionCreators, createTransaction } from '@near-js/transactions';
 import type { KeyPairString } from '@near-js/crypto';
 import { fromBase64, toHex } from './encode.js';
-import { base58Encode } from './signing.js';
+import { base58Decode, base58Encode } from './signing.js';
 import { errorCode, parseEvents } from './events.js';
 import type {
   BuyerView, CallView, ContractBallot, ContractConfig, ContractEvent, JurorsView, QuoteView, SellerView, TermsView,
@@ -202,6 +202,9 @@ function noVerdict(err: unknown): boolean {
  * admitted, `InvalidChain` ("parent block hash doesn't belong to the current chain", seen on the
  * 2.10.0 sandbox with many concurrent transactions), leads to signing again (fresh block hash and
  * nonce), at most `tries` times. With `throwOnFailure` (default) a failed execution throws.
+ * The transaction references the latest **final** block (near-js uses the optimistic head, which
+ * the 2.10.0 sandbox sometimes never makes canonical: `InvalidChain`, or a transaction it accepts
+ * and never executes).
  */
 export async function signAndSend(account: Account, params: SendParams, o: { tries?: number; timeoutMs?: number } = {}): Promise<Outcome> {
   const { tries = 4, timeoutMs = TX_TIMEOUT_MS } = o;
@@ -211,7 +214,7 @@ export async function signAndSend(account: Account, params: SendParams, o: { tri
   // a provider that makes each request once; the loop below decides what to retry
   const rpc = new JsonRpcProvider((account.provider as JsonRpcProvider).connection, { retries: 1 });
   for (let i = 1; ; i++) {
-    const tx = await within(account.createTransaction(params.receiverId, params.actions, await signer.getPublicKey()), deadline, '(not signed yet)', timeoutMs);
+    const tx = await within(buildTx(account, params), deadline, '(not signed yet)', timeoutMs);
     const [hashBytes, signed] = await signer.signTransaction(tx);
     const hash = base58Encode(hashBytes);
     let outcome: Outcome;
@@ -230,6 +233,16 @@ export async function signAndSend(account: Account, params: SendParams, o: { tri
     }
     return outcome;
   }
+}
+
+/** Unsigned transaction: next nonce of the signer's key, latest final block hash. */
+async function buildTx(account: Account, params: SendParams) {
+  const pk = await account.getSigner()!.getPublicKey();
+  const [key, block] = await Promise.all([
+    account.provider.viewAccessKey(account.accountId, pk, { finality: 'optimistic' }),
+    account.provider.viewBlock({ finality: 'final' }),
+  ]);
+  return createTransaction(account.accountId, pk, params.receiverId, BigInt(key.nonce) + 1n, params.actions, base58Decode(block.header.hash));
 }
 
 /** Send `signed` and wait for its execution; on no verdict, look it up by hash, else resend the same bytes. */

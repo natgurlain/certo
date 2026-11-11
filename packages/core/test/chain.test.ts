@@ -108,6 +108,7 @@ describe('signAndSend (scripted RPC)', () => {
   it('after a send_tx timeout looks the transaction up by hash and does not send it again', async () => {
     expect(await run({ send_tx: [TIMEOUT], tx: [{ result: OUTCOME }] })).toEqual(OUTCOME);
     expect([calls('send_tx').length, calls('tx').length, signings()]).toEqual([1, 1, 1]);
+    expect(calls('block')[0]!.params).toMatchObject({ finality: 'final' }); // never the optimistic head
   });
 
   it('resends the same signed bytes when the node does not know the transaction, never re-signs', async () => {
