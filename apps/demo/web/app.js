@@ -344,10 +344,10 @@ function renderHeader() {
   box.className = "mode";
   if (m) {
     let label;
-    if (m.panel === "live") { label = "Panel: live answers from NEAR AI Cloud enclaves"; box.classList.add("live"); }
+    if (m.panel === "live") { label = "Live NEAR AI panel, asked now"; box.classList.add("live"); }
     else if (m.panel === "replay") {
       const when = m.recordedAt ? new Date(isNaN(Number(m.recordedAt)) ? m.recordedAt : Number(m.recordedAt)).toISOString().slice(0, 10) : "earlier";
-      label = `Panel answers recorded ${when}, signatures verified live`;
+      label = `Real NEAR AI ballots, recorded ${when}`;
       box.classList.add("replay");
     } else if (m.panel === "replay-synthetic") { label = "Panel answers signed with a local TEST key (synthetic)"; box.classList.add("synthetic"); }
     else label = `Panel: ${m.panel}`;
