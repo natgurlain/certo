@@ -9,7 +9,9 @@
  * existing binary instead. Accounts are created in genesis, so no
  * account-creation transactions are needed.
  */
+import type { ChildProcess } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -153,8 +155,22 @@ export class LocalChain {
     });
   }
 
+  /**
+   * Stops the node and removes its home directory, in bounded time. near-sandbox's `tearDown()`
+   * sends SIGTERM and then waits for the child's "exit" event with no limit; when the node has
+   * already exited, or does not react on a busy machine, that wait never ends (seen as
+   * `make guards` hanging after its last guard). Here: the normal tearDown for up to 8 s, then
+   * SIGKILL and remove the home directory ourselves.
+   */
   async stop(): Promise<void> {
-    await this.sandbox.tearDown().catch(() => undefined);
+    const sb = this.sandbox as unknown as { childProcess?: ChildProcess; homeDir?: string };
+    const child = sb.childProcess;
+    const alive = !!child && child.exitCode === null && child.signalCode === null;
+    const timer = (ms: number) => new Promise<false>((ok) => setTimeout(() => ok(false), ms).unref());
+    const done = alive ? await Promise.race([this.sandbox.tearDown().then(() => true, () => true), timer(8_000)]) : false;
+    if (done) return;
+    if (alive) child!.kill('SIGKILL');
+    if (sb.homeDir) await rm(sb.homeDir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 
