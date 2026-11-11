@@ -2,8 +2,8 @@
 //
 //   npx tsx apps/demo/web/mock-feed.ts            -> http://localhost:4020
 //
-// Serves apps/demo/web/ statically and replays a scripted run of the four
-// scenes from docs/DESIGN.md 5.5 at /events, using the message shapes in
+// Serves apps/demo/web/ statically and replays a scripted run of the five
+// scenes (docs/DESIGN.md 5.5 plus the forged vote) at /events, using the message shapes in
 // apps/demo/EVENTS.md. Like the runner, it replays every message sent so far
 // to each new client, so the page can be opened mid-run or after the run.
 //
@@ -149,9 +149,9 @@ async function script(): Promise<void> {
     buyers: [{ id: "scout", label: "scout" }, { id: "scout-liar", label: "scout-liar" }],
     sellers: [{ id: "chainfacts", label: "chainfacts" }, { id: "cheapfacts", label: "cheapfacts" }],
     jurors: [
-      { index: 0, model: "Qwen3.8", family: "Qwen" },
-      { index: 1, model: "GLM-5.3", family: "GLM" },
-      { index: 2, model: "DeepSeek-V4.1", family: "DeepSeek" },
+      { index: 0, model: "Qwen/Qwen3.8-27B", name: "Qwen", family: "Alibaba Qwen" },
+      { index: 1, model: "z-ai/glm-5.3-flash", name: "GLM", family: "Zhipu GLM" },
+      { index: 2, model: "deepseek-ai/DeepSeek-V4.1-Flash-1017", name: "DeepSeek", family: "DeepSeek" },
     ],
   });
   chain("jurors_set", { epoch: 1, model_ids: ["Qwen3.8", "GLM-5.3", "DeepSeek-V4.1"] });
@@ -163,10 +163,10 @@ async function script(): Promise<void> {
   send({ kind: "log", actor: "scout", text: `${REQUEST} → 402, price 0.40` });
   await sleep(1500);
   const c1 = await pay("scout", "chainfacts");
-  send({ kind: "call", scene: 1, buyer: "scout", seller: "chainfacts", request: REQUEST, price: amt(PRICE), callId: c1, status: 200, responsePreview: GOOD });
+  send({ kind: "call", scene: 1, buyer: "scout", seller: "chainfacts", request: REQUEST, price: amt(PRICE), callId: c1, status: 200, responsePreview: GOOD, windowMs: 120_000 });
   send({ kind: "log", actor: "scout", text: "receipt verified; token NEAR as requested" });
   await sleep(3500);
-  send({ kind: "scene", n: 1, title: "Honest seller: paid in the same transaction", status: "ok", line: "Scene 1 OK: seller balance +0.396000 in the paying transaction" });
+  send({ kind: "scene", n: 1, title: "Honest seller: paid in the same transaction", status: "ok", line: "Scene 1 OK: seller balance +0.396000 in the paying transaction", caption: "chainfacts got +0.396 in scout's own transaction: nothing held in escrow" });
   if (STOP_AFTER <= 1) return;
   await sleep(2000);
 
@@ -182,7 +182,7 @@ async function script(): Promise<void> {
   await panelDispute(2, "scout", "cheapfacts", c2, "buyer");
   send({ kind: "log", actor: "scout", text: "refund 0.40 received, stake 0.02 returned" });
   await sleep(4000);
-  send({ kind: "scene", n: 2, title: "Wrong token: the panel decides", status: "ok", line: "Scene 2 OK: votes buyer/buyer/buyer, 3 signatures verified by contract, refund 0.400000, bond 50.000000 → 49.580000, fee 1.0% → 1.5%" });
+  send({ kind: "scene", n: 2, title: "Wrong token: the panel decides", status: "ok", line: "Scene 2 OK: votes buyer/buyer/buyer, 3 signatures verified by contract, refund 0.400000, bond 50.000000 → 49.580000, fee 1.0% → 1.5%", caption: "3–0 for the buyer, 3 signatures checked by the contract: 0.40 back from cheapfacts' bond" });
   if (STOP_AFTER <= 2) return;
   await sleep(2000);
 
@@ -198,7 +198,7 @@ async function script(): Promise<void> {
   await panelDispute(3, "scout-liar", "chainfacts", c3, "seller");
   send({ kind: "log", actor: "scout-liar", text: "lost 0-3; stake 0.02 forfeited" });
   await sleep(4000);
-  send({ kind: "scene", n: 3, title: "Lying buyer: loses and pays the ruling fee", status: "ok", line: "Scene 3 OK: votes seller/seller/seller, buyer stake 0.020000 forfeited" });
+  send({ kind: "scene", n: 3, title: "Lying buyer: loses and pays the ruling fee", status: "ok", line: "Scene 3 OK: votes seller/seller/seller, buyer stake 0.020000 forfeited", caption: "0–3 for the seller: scout-liar loses its 0.02 stake; chainfacts keeps bond and fee" });
   if (STOP_AFTER <= 3) return;
   await sleep(2000);
 
@@ -215,7 +215,7 @@ async function script(): Promise<void> {
   buyers.scout -= STAKE;
   chain("dispute_opened", { call_id: c4, kind: "non_delivery", stake: raw(STAKE), answer_by_ms: opened + 5000 });
   state();
-  send({ kind: "dispute", scene: 4, callId: c4, buyer: "scout", seller: "cheapfacts", stake: amt(STAKE), answerByMs: opened + 5000, ...disputeKind("non_delivery") });
+  send({ kind: "dispute", scene: 4, callId: c4, buyer: "scout", seller: "cheapfacts", stake: amt(STAKE), answerByMs: opened + 5000, answerMs: 5000, ...disputeKind("non_delivery") });
   await new Promise((r) => setTimeout(r, Math.max(0, opened + 5300 - Date.now())));
   const s = sellers.cheapfacts;
   buyers.scout += PRICE + STAKE;
@@ -228,8 +228,27 @@ async function script(): Promise<void> {
   send({ kind: "resolved", scene: 4, callId: c4, tier: "rule", winner: "buyer", refund: amt(PRICE), elapsedMs: Date.now() - opened });
   send({ kind: "log", actor: "scout", text: "refund 0.40 by rule, stake 0.02 returned" });
   await sleep(3000);
-  send({ kind: "scene", n: 4, title: "Seller down: refund by rule, no panel", status: "ok", line: "Scene 4 OK: seller did not answer in 5 s (demo setting; 30 s on testnet), refund 0.400000 by rule, no panel" });
-  send({ kind: "done", ok: true, summary: "DEMO OK: 4/4 scenes, 3/3 juror signatures verified on chain" });
+  send({ kind: "scene", n: 4, title: "Seller down: refund by rule, no panel", status: "ok", line: "Scene 4 OK: seller did not answer in 5 s (demo setting; 30 s on testnet), refund 0.400000 by rule, no panel", caption: "cheapfacts silent 5 s: 0.40 refunded by rule, no panel; fee 1.5% → 2.5%" });
+  if (STOP_AFTER <= 4) return;
+  await sleep(2000);
+
+  // Scene 5: one byte of a juror's signed answer changed; the contract rejects it.
+  const t5 = "We attack our own contract: one byte of a juror's signed answer changed";
+  send({ kind: "scene", n: 5, title: t5, status: "start" });
+  await sleep(1500);
+  const c5 = await pay("scout-liar", "chainfacts");
+  send({ kind: "call", scene: 5, buyer: "scout-liar", seller: "chainfacts", request: REQUEST, price: amt(PRICE), callId: c5, status: 200, responsePreview: GOOD });
+  await sleep(1500);
+  send({ kind: "dispute", scene: 5, callId: c5, buyer: "scout-liar", seller: "chainfacts", buyerOfferPct: 100, sellerOfferPct: 0, stake: amt(STAKE), ...disputeKind("content") });
+  await sleep(2000);
+  const forged = { kind: "attack", scene: 5, callId: c5, juror: 0, from: "Y", to: "X", votes: ["buyer", "seller", "seller"] };
+  chain("tx_failed", { method: "resolve", signer: "resolver", error: "E_BALLOT_SIG" });
+  send({ ...forged, build: "real", rejected: true, error: "E_BALLOT_SIG", txHash: txHash() });
+  await sleep(2500);
+  send({ ...forged, build: "no-check", rejected: false, winner: "seller", txHash: txHash() });
+  await sleep(3000);
+  send({ kind: "scene", n: 5, title: t5, status: "ok", line: "Scene 5 forged vote: certo rejected it with E_BALLOT_SIG; res/guards/certo_no_g1.wasm counted it", caption: "Forged vote rejected with E_BALLOT_SIG; a build without the check counted it" });
+  send({ kind: "done", ok: true, summary: "DEMO OK: 5/5 scenes, 3/3 juror signatures verified on chain" });
 }
 
 const MIME: Record<string, string> = {

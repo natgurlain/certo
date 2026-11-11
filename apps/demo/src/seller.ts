@@ -26,6 +26,8 @@ export interface DemoSellerOptions {
   onBot?: Parameters<typeof createAnswerBot>[0]['onAction'];
   /** Answer-bot polling interval (default 400 ms; the testnet run uses a slower one to spare the public RPC). */
   botPollMs?: number;
+  /** HTTP port (default: any free port; a taken port also falls back to a free one). */
+  port?: number;
 }
 
 export interface DemoSeller {
@@ -55,7 +57,11 @@ export async function startDemoSeller(o: DemoSellerOptions): Promise<DemoSeller>
     }
     res.status(200).type('application/json').send(body);
   });
-  const server: Server = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
+  const listen = (port: number) => new Promise<Server>((resolve, reject) => {
+    const s = app.listen(port, '127.0.0.1', () => resolve(s));
+    s.once('error', reject);
+  });
+  const server: Server = await listen(o.port ?? 0).catch(() => listen(0));
   const bot = createAnswerBot({ chain: o.chain, store: mw.store, offerBps: o.offerBps ?? 0, onAction: o.onBot });
   bot.start(o.botPollMs ?? 400);
   const seller: DemoSeller = {

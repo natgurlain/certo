@@ -56,6 +56,8 @@ export interface DemoWorld {
   /** Explorer link of a transaction (null on the sandbox). */
   txUrl(hash: string): string | null;
   stop(): Promise<void>;
+  /** The local market (sandbox only): its chain holds every genesis key. */
+  local?: Market;
 }
 
 export interface MarketSpec {

@@ -6,7 +6,7 @@ import {
   receiptText, requestCanon, sha256Hex, toHex, verifyBase64, type PaymentRequired, type PaymentResponse, type PaymentSignature,
 } from '@certo/core';
 import { FakeChain } from '@certo/core/testing';
-import { createAnswerBot, protect } from '../src/index.js';
+import { createAnswerBot, MAX_SIGNED_BODY, protect, SCHEME_HINT } from '../src/index.js';
 
 const SELLER = 'chainfacts.test.near';
 const BUYER = 'scout.test.near';
@@ -15,7 +15,7 @@ const chain = new FakeChain();
 chain.addSeller(SELLER, toHex(key.publicKey));
 chain.addTermsFor(SELLER, 'holders-v1', 'terms');
 const buyerChain = chain.as(BUYER);
-let mode: 'good' | 'throw' | '503' | 'chunked' = 'good';
+let mode: 'good' | 'throw' | '503' | 'chunked' | 'big' = 'good';
 let calls = 0;
 
 const mw = protect({ contract: chain, seller: SELLER, termsId: 'holders-v1', price: '400000', receiptKey: key, clock: { now: () => 1794300001000, sleep: async () => {} } });
@@ -24,6 +24,7 @@ app.all('/v1/holders', mw, (req, res) => {
   calls++;
   if (mode === 'throw') throw new Error('boom');
   if (mode === '503') return void res.status(503).json({ error: 'upstream unavailable' });
+  if (mode === 'big') return void res.type('text/plain').send('x'.repeat(MAX_SIGNED_BODY + 1));
   if (mode === 'chunked') { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.write('part1,'); res.end('part2'); return; }
   res.json({ token: String(req.query.token), body: req.body });
 });
@@ -73,6 +74,9 @@ describe('protect()', () => {
       extra: { seller: SELLER, termsId: 'holders-v1', windowMs: 120000, feeBps: 100 },
     });
     expect(pr.accepts[0]!.extra.quoteId).toMatch(/^[0-9a-f]{32}$/);
+    expect(pr.accepts[0]!.extra.docs).toBe('');
+    expect(pr.resource.description).toBe(SCHEME_HINT);
+    expect(SCHEME_HINT).toMatch(/certo-bonded.*npx certo call <url>.*certo-mcp/);
     expect(await r.json()).toEqual(pr);
   });
 
@@ -191,5 +195,44 @@ describe('answer bot', () => {
     expect(cure.response_body).toBe(bBytes.toString());
     expect(cure.response_hash).toBe(sha256Hex(bBytes));
     expect(cure.sig).toBe(decodeHeader<PaymentResponse>(b.r.headers.get(HDR_PAYMENT_RESPONSE)!).receipt.sig);
+  });
+});
+
+describe('size cap and bot retries', () => {
+  it('refuses to sign a body larger than the contract can judge: signed 500 instead', async () => {
+    mode = 'big';
+    const err = console.error;
+    const logged: string[] = [];
+    console.error = (m: string) => void logged.push(m);
+    try {
+      const a = await payAndRetry('/v1/holders?token=BIG');
+      const bytes = Buffer.from(await a.r.arrayBuffer());
+      expect(a.r.status).toBe(500);
+      expect(JSON.parse(bytes.toString())).toEqual({ error: `response too large to bond: ${MAX_SIGNED_BODY + 1} bytes > ${MAX_SIGNED_BODY}` });
+      checkReceipt(decodeHeader<PaymentResponse>(a.r.headers.get(HDR_PAYMENT_RESPONSE)!), bytes, 500, a.canon);
+      expect(logged.join('\n')).toMatch(/exceeds 6144 bytes/);
+    } finally {
+      console.error = err;
+      mode = 'good';
+    }
+  });
+
+  it('a failed answer is retried on the next tick, and counted once it succeeds', async () => {
+    const a = await payAndRetry('/v1/holders?token=RETRY');
+    await a.r.arrayBuffer();
+    const rc = decodeHeader<PaymentResponse>(a.r.headers.get(HDR_PAYMENT_RESPONSE)!).receipt;
+    await buyerChain.disputeContent({ call_id: a.callId, stake: '20000', offer_commit: 'c', response_hash: rc.responseHash, status_code: 200, served_at_ms: rc.servedAtMs, sig: rc.sig });
+    let fail = 1;
+    const flaky = { getCall: (id: string) => chain.getCall(id), cure: chain.cure.bind(chain),
+      answer: async (id: string, bps: number) => { if (fail-- > 0) throw new Error('RPC timeout'); return chain.answer(id, bps); } };
+    const store = new Map([[a.callId, mw.store.get(a.callId)!]]);
+    const actions: string[] = [];
+    const bot = createAnswerBot({ chain: flaky, store, onAction: (x) => actions.push(`${x.action}:${x.error ?? 'ok'}`) });
+    await bot.tick();
+    expect((await chain.getCall(a.callId))!.status).toBe('Disputed');
+    await bot.tick();
+    await bot.tick();
+    expect(actions).toEqual(['answer:RPC timeout', 'answer:ok']);
+    expect((await chain.getCall(a.callId))!.status).toBe('Answered');
   });
 });
