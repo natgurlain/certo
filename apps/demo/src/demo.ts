@@ -8,12 +8,14 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { CertoClient, CertoError, simplePolicy, type CallResult } from '@certo/buyer';
 import {
-  HDR_PAYMENT_SIGNATURE, JURORS, PRODUCT_ID, PRODUCT_NAME, formatUsdc, type ContractError, type ContractEvent, type TxResult,
+  HDR_PAYMENT_SIGNATURE, JURORS, PRODUCT_ID, PRODUCT_NAME, formatUsdc, receiptText, requestHash, sha256Hex, signBase64,
+  type ContractError, type ContractEvent, type TxResult,
 } from '@certo/core';
 import { LiveJurors, PanelService, ReplayJurors, createPanelApp, type CaseOutcome } from '@certo/panel';
 import { Feed } from './feed.js';
+import { ForgingJurors } from './forge.js';
 import { choosePanel, loadDemo, type PanelPlan } from './fixtures.js';
-import { LocalChain, repoFile, SANDBOX_VERSION } from './sandbox.js';
+import { LocalChain, repoFile, SANDBOX_VERSION, WASM } from './sandbox.js';
 import { startDemoSeller, type DemoSeller } from './seller.js';
 import { feeAfterLoss, jurorsForPlan, ensureDeployed, testnetWorld, type TestnetConfig } from './testnet.js';
 import { DEMO_BOND, DEMO_BUYER_FUNDS, addSeller, deployMarket, type DemoWorld, type TracedChain } from './world.js';
@@ -21,7 +23,16 @@ import { DEMO_BOND, DEMO_BUYER_FUNDS, addSeller, deployMarket, type DemoWorld, t
 export const ACCOUNTS = {
   contract: PRODUCT_ID, token: 'usdc', owner: 'owner', resolver: 'resolver',
   sellers: ['chainfacts', 'cheapfacts'] as const, buyers: ['scout', 'scout-liar'] as const,
+  /** Funded buyer left for `make playground` (sandbox only); the scenes never use it. */
+  agent: 'agent',
 };
+/**
+ * Scene 5 (sandbox only): the same contract built without the juror-signature check, with
+ * its own seller, buyer and resolver (one key per client: shared keys race on nonces).
+ */
+const UNCHECKED = { contract: 'certo-unchecked', seller: 'unchecked-seller', buyer: 'unchecked-buyer', resolver: 'unchecked-resolver' } as const;
+/** Juror whose answer scene 5 edits (Qwen). */
+const FORGED_JUROR = 0;
 const BOND = DEMO_BOND;
 const BUYER_FUNDS = DEMO_BUYER_FUNDS;
 const VOTE_GAP_MS = 400;
@@ -34,6 +45,8 @@ export interface DemoOptions {
   /** `sandbox` (default) or `testnet` (needs `testnet`, from `readTestnetConfig`). */
   network?: 'sandbox' | 'testnet';
   testnet?: TestnetConfig;
+  /** Fixed HTTP ports of the demo sellers (default: any free port). */
+  sellerPorts?: Partial<Record<(typeof ACCOUNTS.sellers)[number], number>>;
 }
 
 export interface DemoResult {
@@ -45,15 +58,26 @@ export interface DemoResult {
   feed: Feed;
   port: number | null;
   elapsedMs: number;
+  /** The world the scenes ran on, still running until `shutdown`. */
+  world: DemoWorld;
+  panelUrl: string;
+  /** URL of the demo request at each seller. */
+  exampleUrls: Record<string, string>;
+  /** Restart the sellers scene 4 stopped (same port, same receipt key), e.g. for `make playground`. */
+  reviveSellers(): Promise<void>;
   shutdown(opts?: { keepFeed?: boolean }): Promise<void>;
 }
 
 const pct = (bps: number) => `${(bps / 100).toFixed(1)}%`;
+/** Short juror name for the page: the last word of the model family ("Alibaba Qwen" → "Qwen"). */
+export const jurorName = (family: string) => family.split(' ').pop() ?? family;
+/** Amount for captions: "0.400000" → "0.40", "0.396000" → "0.396". */
+const cap = (x: bigint | string) => { const [i, f = ''] = formatUsdc(x).split('.'); return `${i}.${f.replace(/0+$/, '').padEnd(2, '0')}`; };
 const short = (h: string) => `${h.slice(0, 8)}…`;
 
 /** Local sandbox market: genesis accounts, both contracts, two bonded sellers, two funded buyers. */
 async function sandboxWorld(plan: PanelPlan, terms: Array<{ terms_id: string; text: string; panel: boolean }>): Promise<DemoWorld> {
-  const chain = await LocalChain.start([ACCOUNTS.contract, ACCOUNTS.token, ACCOUNTS.owner, ACCOUNTS.resolver, ...ACCOUNTS.sellers, ...ACCOUNTS.buyers]);
+  const chain = await LocalChain.start([ACCOUNTS.contract, ACCOUNTS.token, ACCOUNTS.owner, ACCOUNTS.resolver, ...ACCOUNTS.sellers, ...ACCOUNTS.buyers, ACCOUNTS.agent, ...Object.values(UNCHECKED)]);
   try {
     const market = await deployMarket({
       chain, contract: ACCOUNTS.contract, token: ACCOUNTS.token, owner: ACCOUNTS.owner, resolver: ACCOUNTS.resolver,
@@ -62,7 +86,7 @@ async function sandboxWorld(plan: PanelPlan, terms: Array<{ terms_id: string; te
     const regs = await Promise.all([
       addSeller(market, { id: 'chainfacts', bond: BOND, terms }),
       addSeller(market, { id: 'cheapfacts', bond: BOND, terms }),
-      ...ACCOUNTS.buyers.map((b) => market.mint(b, BUYER_FUNDS)),
+      ...[...ACCOUNTS.buyers, ACCOUNTS.agent].map((b) => market.mint(b, BUYER_FUNDS)),
     ]);
     const keys = new Map(regs.filter((r): r is Awaited<ReturnType<typeof addSeller>> => !!r).map((r) => [r.id, r.receiptKey]));
     return {
@@ -74,6 +98,7 @@ async function sandboxWorld(plan: PanelPlan, terms: Array<{ terms_id: string; te
       receiptKey: (label) => keys.get(label)!,
       txUrl: () => null,
       stop: () => chain.stop(),
+      local: market,
     };
   } catch (e) {
     await chain.stop();
@@ -122,9 +147,9 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
   feed.emit({ kind: 'mode', panel: plan.mode, network, ...(plan.recordedAt && plan.mode !== 'live' ? { recordedAt: plan.recordedAt } : {}) });
   feed.emit({
     kind: 'actors',
-    buyers: [{ id: 'scout', label: 'Buyer agent scout' }, { id: 'scout-liar', label: 'Buyer agent scout-liar' }],
-    sellers: [{ id: 'chainfacts', label: 'chainfacts (honest)' }, { id: 'cheapfacts', label: 'cheapfacts' }],
-    jurors: JURORS.map((j) => ({ index: j.index, model: j.model, family: j.family })),
+    buyers: ACCOUNTS.buyers.map((id) => ({ id, label: id })),
+    sellers: ACCOUNTS.sellers.map((id) => ({ id, label: id })),
+    jurors: JURORS.map((j) => ({ index: j.index, model: j.model, name: jurorName(j.family), family: j.family })),
   });
 
   const fx = loadDemo();
@@ -166,7 +191,8 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
             bond: formatUsdc(s?.bond ?? '0'),
             exposed: formatUsdc(s ? BigInt(s.bond) - BigInt(s.free_capacity) : 0n),
             feeBps: s?.fee_bps ?? 0,
-            record: { calls: s?.lifetime_calls ?? 0, losses: s?.lifetime_losses ?? 0 },
+            // paid calls this run (the contract's lifetime_calls counts released calls only)
+            record: { calls: paidCalls.get(id) ?? 0, losses: s?.lifetime_losses ?? 0 },
           }] as const;
         })),
       ]);
@@ -174,12 +200,22 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
     }).catch(() => undefined);
     return snapshotQueue;
   };
+  const paidCalls = new Map<string, number>();
+  /** While set, the resolver's transactions reach the feed only when flushed (after the staged votes). */
+  let held: Array<() => void> | null = null;
   const onTx = (signer: string) => (method: string, tx: TxResult, err?: ContractError) => {
     lastTx.set(`${signer}:${method}`, tx);
     txLog.push({ signer, method, hash: tx.txHash, ...(err ? { error: err.code ?? err.message } : {}) });
-    for (const e of tx.events) feed.emit({ kind: 'chain', event: e.event, data: e.data, txHash: tx.txHash });
-    if (err) feed.emit({ kind: 'chain', event: 'tx_failed', data: { method, signer, error: err.code ?? err.message }, txHash: tx.txHash });
-    void snapshot();
+    const publish = () => {
+      for (const e of tx.events) {
+        if (e.event === 'call_paid') { const s = labelOf(String(e.data.seller)); paidCalls.set(s, (paidCalls.get(s) ?? 0) + 1); }
+        feed.emit({ kind: 'chain', event: e.event, data: e.data, txHash: tx.txHash });
+      }
+      if (err) feed.emit({ kind: 'chain', event: 'tx_failed', data: { method, signer, error: err.code ?? err.message }, txHash: tx.txHash });
+      void snapshot();
+    };
+    if (held && signer === ACCOUNTS.resolver) held.push(publish);
+    else publish();
   };
 
   const clientOf = (id: string) => world.client(id, onTx(id));
@@ -199,18 +235,27 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
     else feed.emit({ kind: 'log', actor: seller, text: `${a.action === 'answer' ? 'answered the dispute: offer 0%' : 'cured the claim'} (${short(a.txHash ?? '')})` });
   };
   const sellers: Record<string, DemoSeller> = {};
-  for (const label of ACCOUNTS.sellers) {
+  const startSeller = async (label: (typeof ACCOUNTS.sellers)[number], port?: number) => {
     const s = await startDemoSeller({
       id: world.id(label), chain: clientOf(label), receiptKey: world.receiptKey(label), termsId: fx.terms.terms_id, price: fx.price,
-      responses: { [fx.request]: fx.responses[label] }, offerBps: 0, onBot: botLog(label), botPollMs: testnet ? 1500 : 400,
+      responses: { [fx.request]: fx.responses[label] }, offerBps: 0, onBot: botLog(label), botPollMs: testnet ? 1500 : 400, port,
     });
     sellers[label] = s;
     servers.push({ close: () => s.kill() });
-  }
+  };
+  for (const label of ACCOUNTS.sellers) await startSeller(label, o.sellerPorts?.[label]);
+  const reviveSellers = async () => {
+    for (const label of ACCOUNTS.sellers) {
+      if (sellers[label]!.alive) continue;
+      await startSeller(label, Number(new URL(sellers[label]!.url).port));
+      feed.emit({ kind: 'log', actor: label, text: 'process restarted' });
+    }
+  };
   const jurors = plan.mode === 'live'
     ? new LiveJurors({ apiKey: env.NEARAI_API_KEY!, baseUrl: env.NEARAI_BASE_URL })
     : new ReplayJurors(repoFile('fixtures/panel'));
-  const panelApp = createPanelApp(new PanelService({ chain: clientOf(ACCOUNTS.resolver), jurors }), { mode: plan.mode });
+  const resolverChain = clientOf(ACCOUNTS.resolver); // one client per key: scene 5 submits through it too
+  const panelApp = createPanelApp(new PanelService({ chain: resolverChain, jurors }), { mode: plan.mode });
   const panelServer: Server = await new Promise((r) => { const s = panelApp.listen(0, '127.0.0.1', () => r(s)); });
   servers.push({ close: () => new Promise<void>((r) => { panelServer.closeAllConnections(); panelServer.close(() => r()); }) });
   const panelUrl = `http://127.0.0.1:${(panelServer.address() as AddressInfo).port}`;
@@ -235,7 +280,12 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
   const urlOf = (s: string) => `${sellers[s]!.url}${fx.request}`;
   const sellerView = async (label: string) => (await viewer.getSeller(world.id(label)))!;
   const bal = (label: string) => world.balance(world.id(label));
-  const highlightOf = (body: string): string | undefined => /"token":"[^"]*"/.exec(body)?.[0];
+  const asked = new URLSearchParams(fx.request.split('?')[1] ?? '').get('token');
+  /** The page highlights the `token` field only when it is not the token asked for. */
+  const mismatchOf = (body: string): string | undefined => {
+    const m = /"token":"([^"]*)"/.exec(body);
+    return m && m[1] !== asked ? m[0] : undefined;
+  };
 
   const emitCall = async (scene: number, buyerId: string, sellerId: string, r: CallResult | null, callId: string, highlight?: string) => {
     const [call, sv] = await Promise.all([viewer.getCall(callId), viewer.getSeller(sellerId)]);
@@ -247,6 +297,7 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
     });
   };
   const verifiedJurors = new Set<number>();
+  const flush = () => { const h = held ?? []; held = null; for (const f of h) f(); };
 
   /** Content dispute → seller's answer → panel → resolve. Returns the panel outcome. */
   const contentDispute = async (scene: number, client: CertoClient, buyerId: string, r: CallResult): Promise<{ outcome: CaseOutcome; stake: string; t: number }> => {
@@ -261,12 +312,20 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
     const sellerBps = answered?.dispute?.seller_offer_bps ?? 0;
     say(`${sellerLabel} answered with offer ${sellerBps / 100}%`);
     feed.emit({ kind: 'dispute', scene, callId: r.callId, buyer: buyerId, seller: sellerLabel, disputeKind: 'content', stake: formatUsdc(d.stake), sellerOfferPct: sellerBps / 100 });
-    const outcome = (await client.submitToPanel(panelUrl, r.callId)) as CaseOutcome;
+    held = [];
+    let outcome: CaseOutcome;
+    try {
+      outcome = (await client.submitToPanel(panelUrl, r.callId)) as CaseOutcome;
+    } catch (e) {
+      flush();
+      throw e;
+    }
     feed.emit({
       kind: 'dispute', scene, callId: r.callId, buyer: buyerId, seller: sellerLabel, disputeKind: 'content', stake: formatUsdc(d.stake),
       buyerOfferPct: d.offerBps / 100, sellerOfferPct: sellerBps / 100,
     });
     const bv = outcome.events?.find((e) => e.event === 'ballots_verified') as ContractEvent<{ votes: string[]; kinds: string[] }> | undefined;
+    if (!outcome.submitted || !bv) flush();
     expect(outcome.submitted && !!bv, `panel did not resolve on chain (${outcome.reason ?? 'no ballots_verified event'})`);
     // the contract accepted all three signatures in one transaction; the votes are fed one by one so the page can show them in turn
     for (const [i, v] of bv!.data.votes.entries()) {
@@ -274,11 +333,13 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
       feed.emit({ kind: 'vote', scene, callId: r.callId, juror: i, model: JURORS[i]!.model, vote: v, sigVerified: true });
       await new Promise((res) => setTimeout(res, VOTE_GAP_MS));
     }
+    flush(); // the resolve transaction's events (ballots_verified, dispute_resolved) follow the votes
     say(`panel (${plan.mode}${synthetic ? ', TEST-key signatures' : ''}): ${JURORS.map((j, i) => `${j.model.split('/').pop()} ${bv!.data.votes[i]}`).join(', ')}; contract checked 3 ed25519 signatures over the prompts it rebuilt (tx ${txRef(outcome.txHash ?? '')})`);
     return { outcome, stake: d.stake, t };
   };
 
-  const scenes: Array<{ title: string; run: () => Promise<string> }> = [
+  /** `line`: the transcript line; `caption`: the short result the page shows (EVENTS.md, `scene`). */
+  const scenes: Array<{ title: string; run: () => Promise<{ line: string; caption: string }> }> = [
     {
       title: 'Honest call: paid in the same transaction',
       run: async () => {
@@ -287,7 +348,7 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
         say(`scout → chainfacts: GET ${fx.request} (price ${formatUsdc(fx.price)}; 402 quote → pay on chain → retry with proof)`);
         const r = await scout.call(urlOf('chainfacts'));
         const payTx = lastTx.get('scout:ft_transfer_call(pay)')!;
-        await emitCall(1, 'scout', 'chainfacts', r, r.callId, highlightOf(r.body));
+        await emitCall(1, 'scout', 'chainfacts', r, r.callId, mismatchOf(r.body));
         const after = await bal('chainfacts');
         const fee = BigInt(fx.price) * BigInt(s0.fee_bps) / 10000n;
         const net = BigInt(fx.price) - fee;
@@ -298,7 +359,10 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
         expect(decision.action === 'accept', `agent did not accept: ${decision.reason}`);
         say(`delivered ${r.body.length} bytes with a seller-signed receipt; agent: ${decision.reason} → accept`);
         feed.emit({ kind: 'log', actor: 'scout', text: `${decision.reason} → accept` });
-        return `Scene 1 honest call: scout paid chainfacts ${formatUsdc(fx.price)}, fee ${formatUsdc(fee)} (${pct(s0.fee_bps)}), seller balance +${formatUsdc(net)} in the paying transaction ${txRef(r.payTx)}`;
+        return {
+          line: `Scene 1 honest call: scout paid chainfacts ${formatUsdc(fx.price)}, fee ${formatUsdc(fee)} (${pct(s0.fee_bps)}), seller balance +${formatUsdc(net)} in the paying transaction ${txRef(r.payTx)}`,
+          caption: `chainfacts got +${cap(net)} in scout's own transaction: nothing held in escrow`,
+        };
       },
     },
     {
@@ -308,11 +372,11 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
         const b0 = await bal('scout');
         say(`scout → cheapfacts: GET ${fx.request}`);
         const r = await scout.call(urlOf('cheapfacts'));
-        const hl = highlightOf(r.body);
+        const hl = mismatchOf(r.body);
         await emitCall(2, 'scout', 'cheapfacts', r, r.callId, hl);
         const decision = simplePolicy(r);
         expect(decision.action === 'dispute', `agent did not dispute: ${decision.reason}`);
-        const logText = `asked NEAR, got ${hl?.split(':')[1]?.replaceAll('"', '') ?? '?'} → claim a ${PRODUCT_ID}`;
+        const logText = `asked NEAR, got ${hl?.split(':')[1]?.replaceAll('"', '') ?? '?'} → claim a refund`;
         say(`agent: ${logText}`);
         feed.emit({ kind: 'log', actor: 'scout', text: logText });
         const { outcome, t } = await contentDispute(2, scout, 'scout', r);
@@ -326,7 +390,10 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
         expect((testnet || s0.fee_bps === 100) && s1.fee_bps === feeAfterLoss(s0.fee_bps), `fee ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)}`);
         expect(b1 === b0, `buyer balance ${formatUsdc(b0)} → ${formatUsdc(b1)} (expected unchanged after refund and stake back)`);
         feed.emit({ kind: 'resolved', scene: 2, callId: r.callId, tier: 'panel', winner: 'buyer', refund: formatUsdc(res.refund), votes: '3-0', elapsedMs: Date.now() - t });
-        return `Scene 2 asked NEAR, got NEO: content dispute, votes ${res.votes.join('/')}, 3 signatures verified by contract${synthetic ? ' (synthetic test keys)' : ''}, refund ${formatUsdc(res.refund)}, bond ${formatUsdc(s0.bond)} → ${formatUsdc(s1.bond)}, fee ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)}`;
+        return {
+          line: `Scene 2 asked NEAR, got NEO: content dispute, votes ${res.votes.join('/')}, 3 signatures verified by contract${synthetic ? ' (synthetic test keys)' : ''}, refund ${formatUsdc(res.refund)}, bond ${formatUsdc(s0.bond)} → ${formatUsdc(s1.bond)}, fee ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)}`,
+          caption: `3–0 for the buyer, 3 signatures checked by the contract: ${cap(res.refund)} back from cheapfacts' bond`,
+        };
       },
     },
     {
@@ -336,7 +403,7 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
         const b0 = await bal('scout-liar');
         say(`scout-liar → chainfacts: GET ${fx.request}`);
         const r = await liar.call(urlOf('chainfacts'));
-        await emitCall(3, 'scout-liar', 'chainfacts', r, r.callId, highlightOf(r.body));
+        await emitCall(3, 'scout-liar', 'chainfacts', r, r.callId, mismatchOf(r.body));
         const honest = simplePolicy(r);
         say(`agent scout-liar: ${honest.reason}, disputes anyway (offer 100%)`);
         feed.emit({ kind: 'log', actor: 'scout-liar', text: `${honest.reason}; disputes anyway` });
@@ -350,7 +417,10 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
         expect((testnet || BigInt(stake) === 20_000n) && b0 - b1 === BigInt(fx.price) + BigInt(stake), `liar paid ${formatUsdc(b0 - b1)}, expected price + ${formatUsdc(stake)} stake`);
         expect(s1.bond === s0.bond && s1.fee_bps === s0.fee_bps, `seller bond/fee changed: ${formatUsdc(s0.bond)} → ${formatUsdc(s1.bond)}, ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)}`);
         feed.emit({ kind: 'resolved', scene: 3, callId: r.callId, tier: 'panel', winner: 'seller', refund: formatUsdc(res.refund), votes: '0-3', elapsedMs: Date.now() - t });
-        return `Scene 3 lying buyer: scout-liar disputed correct data, votes ${res.votes.join('/')}, buyer stake ${formatUsdc(stake)} forfeited; chainfacts bond ${formatUsdc(s1.bond)} unchanged, fee stays ${pct(s1.fee_bps)}`;
+        return {
+          line: `Scene 3 lying buyer: scout-liar disputed correct data, votes ${res.votes.join('/')}, buyer stake ${formatUsdc(stake)} forfeited; chainfacts bond ${formatUsdc(s1.bond)} unchanged, fee stays ${pct(s1.fee_bps)}`,
+          caption: `0–3 for the seller: scout-liar loses its ${cap(stake)} stake; chainfacts keeps bond and fee`,
+        };
       },
     },
     {
@@ -378,7 +448,7 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
         const call = await viewer.getCall(callId);
         const answerBy = opened.answer_by_ms ?? (call!.dispute!.opened_at_ms + answerMs);
         say(`non-delivery claim open: stake ${formatUsdc(opened.stake)}; seller has ${answerMs / 1000} s to cure`);
-        feed.emit({ kind: 'dispute', scene: 4, callId, buyer: 'scout', seller: 'cheapfacts', disputeKind: 'non_delivery', stake: formatUsdc(opened.stake), answerByMs: answerBy });
+        feed.emit({ kind: 'dispute', scene: 4, callId, buyer: 'scout', seller: 'cheapfacts', disputeKind: 'non_delivery', stake: formatUsdc(opened.stake), answerByMs: answerBy, answerMs });
         let tx: TxResult | undefined;
         for (let i = 0; !tx; i++) {
           const left = Math.max(0, Math.ceil((answerBy - (await world.nowMs())) / 1000));
@@ -401,21 +471,95 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
         feed.emit({ kind: 'resolved', scene: 4, callId, tier: 'rule', winner: 'buyer', refund: formatUsdc(res.refund), elapsedMs: Date.now() - t });
         say(`resolve_default by scout: refund ${formatUsdc(res.refund)} + stake back; seller pays the ruling fee (tx ${txRef(tx.txHash)})`);
         expect((testnet || s0.fee_bps === 150) && s1.fee_bps === feeAfterLoss(s0.fee_bps), `fee ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)}`);
-        return `Scene 4 seller dead: seller did not answer in ${answerMs / 1000} s (${testnet ? 'testnet setting' : 'demo setting; 30 s on testnet'}), refund ${formatUsdc(res.refund)} by rule, no panel, bond ${formatUsdc(s0.bond)} → ${formatUsdc(s1.bond)}, fee ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)} (${testnet ? 'loss recorded' : 'second loss'})`;
+        return {
+          line: `Scene 4 seller dead: seller did not answer in ${answerMs / 1000} s (${testnet ? 'testnet setting' : 'demo setting; 30 s on testnet'}), refund ${formatUsdc(res.refund)} by rule, no panel, bond ${formatUsdc(s0.bond)} → ${formatUsdc(s1.bond)}, fee ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)} (${testnet ? 'loss recorded' : 'second loss'})`,
+          caption: `cheapfacts silent ${answerMs / 1000} s: ${cap(res.refund)} refunded by rule, no panel; fee ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)}`,
+        };
       },
     },
   ];
+
+  // Scene 5 needs genesis accounts to deploy a second contract, so it runs on the sandbox only.
+  if (world.local) {
+    const market = world.local;
+    scenes.push({
+      title: "We attack our own contract: one byte of a juror's signed answer changed",
+      run: async () => {
+        // a build of the same contract without guard G1 (juror signature check), ready while the real attack runs
+        const weakReady = (async () => {
+          const weak = await deployMarket({
+            chain: market.chain, contract: UNCHECKED.contract, token: market.token, owner: UNCHECKED.resolver, resolver: UNCHECKED.resolver,
+            wasm: WASM.guard(1), jurors: plan.jurors, gatewayKey: plan.gatewayKey, acceptGateway: plan.acceptGateway,
+          });
+          const [seller] = await Promise.all([
+            addSeller(weak, { id: UNCHECKED.seller, bond: '5000000', terms }),
+            weak.mint(UNCHECKED.buyer, BUYER_FUNDS),
+          ]);
+          return { weak, seller };
+        })();
+        weakReady.catch(() => undefined);
+        const forging = new ForgingJurors(jurors, FORGED_JUROR);
+        const juror = JURORS[FORGED_JUROR]!;
+        say(`scout-liar → chainfacts: GET ${fx.request}, then a content dispute on the correct answer`);
+        const r = await liar.call(urlOf('chainfacts'));
+        await emitCall(5, 'scout-liar', 'chainfacts', r, r.callId);
+        const d = await liar.dispute(r, { offerBps: 10_000 });
+        const base = { kind: 'dispute', scene: 5, callId: r.callId, buyer: 'scout-liar', seller: 'chainfacts', disputeKind: 'content', stake: formatUsdc(d.stake) };
+        feed.emit(base);
+        await liar.waitForStatus(r.callId, ['Answered'], { timeoutMs: 20_000, pollMs: 300 });
+        feed.emit({ ...base, sellerOfferPct: 0, buyerOfferPct: d.offerBps / 100 });
+        const caseReq = { call_id: r.callId, buyer_offer_bps: d.offerBps, salt: d.salt, request_canon: r.requestCanon, response_body: r.body };
+
+        // the attack on this demo's contract: the recorded ballots, one answer edited, signatures kept
+        const err = await new PanelService({ chain: resolverChain, jurors: forging, verifyBallots: false })
+          .handleCase(caseReq).then(() => null, (e: unknown) => e as ContractError);
+        const edit = `${jurorName(juror.family)}'s answer ${forging.edit?.from} → ${forging.edit?.to}`;
+        const code = err?.code ?? err?.message ?? 'accepted';
+        say(`attacker changed one byte of ${edit} (signature kept) and submitted resolve: ${PRODUCT_ID} (res/certo.wasm) ${err ? `rejected it with ${code}` : 'ACCEPTED it'}${err?.tx ? ` (tx ${txRef(err.tx.txHash)})` : ''}`);
+        feed.emit({
+          kind: 'attack', scene: 5, callId: r.callId, juror: FORGED_JUROR, from: forging.edit?.from, to: forging.edit?.to, build: 'real',
+          rejected: !!err, ...(err ? { error: code } : {}), votes: forging.sides, ...(err?.tx ? { txHash: err.tx.txHash } : {}),
+        });
+        expect(code === 'E_BALLOT_SIG', `the real contract answered ${code}, expected E_BALLOT_SIG`);
+
+        // the same attack on the build without the check
+        const { weak, seller } = await weakReady;
+        const b = weak.client(UNCHECKED.buyer);
+        const quote = sha256Hex(`scene5:${r.callId}`).slice(0, 32);
+        const callId = `${UNCHECKED.seller}/${quote}`;
+        await b.pay({ seller: UNCHECKED.seller, quote_id: quote, terms_id: fx.terms.terms_id, request_hash: requestHash(r.requestCanon), amount: fx.price });
+        const receipt = { response_hash: sha256Hex(r.body), status_code: 200, served_at_ms: Date.now() };
+        const sig = signBase64(receiptText({
+          contract: UNCHECKED.contract, callId, buyer: UNCHECKED.buyer, price: fx.price, termsId: fx.terms.terms_id, requestHash: requestHash(r.requestCanon),
+          responseHash: receipt.response_hash, statusCode: receipt.status_code, servedAtMs: receipt.served_at_ms,
+        }), seller.receiptKey);
+        await b.disputeContent({ call_id: callId, stake: await new CertoClient({ chain: b }).stakeFor(UNCHECKED.seller, fx.price), offer_commit: d.commit, ...receipt, sig });
+        await seller.chain.answer(callId, 0);
+        const weakOut = await new PanelService({ chain: weak.client(UNCHECKED.resolver), jurors: forging, verifyBallots: false })
+          .handleCase({ ...caseReq, call_id: callId });
+        const bv = weakOut.events?.find((e) => e.event === 'ballots_verified')?.data as { votes?: string[] } | undefined;
+        const votes = bv?.votes ?? [];
+        say(`same attack on ${WASM.guard(1)} (signature check compiled out): forged vote counted, votes ${votes.join('/')} (tx ${txRef(weakOut.txHash ?? '')})`);
+        feed.emit({ kind: 'attack', scene: 5, callId: r.callId, juror: FORGED_JUROR, from: forging.edit?.from, to: forging.edit?.to, build: 'no-check', rejected: false, votes, winner: weakOut.winner, txHash: weakOut.txHash });
+        expect(votes[FORGED_JUROR] === forging.sides[FORGED_JUROR], `the build without the check did not count the forged vote (votes ${votes.join('/')})`);
+        return {
+          line: `Scene 5 forged vote: one byte of ${edit} changed after signing; ${PRODUCT_ID} rejected it with ${code}; ${WASM.guard(1)} (check compiled out) counted it, votes ${votes.join('/')}`,
+          caption: `Forged vote rejected with ${code}; a build without the check counted it`,
+        };
+      },
+    });
+  }
 
   let scenesOk = 0;
   for (const [i, s] of scenes.entries()) {
     feed.emit({ kind: 'scene', n: i + 1, title: s.title, status: 'start' });
     try {
-      const line = await s.run();
+      const { line, caption } = await s.run();
       await snapshot();
       scenesOk++;
       lines.push(line);
       print(line);
-      feed.emit({ kind: 'scene', n: i + 1, title: s.title, status: 'ok', line });
+      feed.emit({ kind: 'scene', n: i + 1, title: s.title, status: 'ok', line, caption });
     } catch (e) {
       const line = `Scene ${i + 1} FAILED: ${(e as Error).message}`;
       lines.push(line);
@@ -433,5 +577,6 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
   feed.emit({ kind: 'done', ok, summary });
   lines.push(summary);
   print(summary);
-  return { ok, scenesOk, jurorsVerified: verifiedJurors.size, plan, lines, feed, port, elapsedMs: Date.now() - t0, shutdown };
+  const exampleUrls = Object.fromEntries(ACCOUNTS.sellers.map((s) => [s, urlOf(s)]));
+  return { ok, scenesOk, jurorsVerified: verifiedJurors.size, plan, lines, feed, port, elapsedMs: Date.now() - t0, world, panelUrl, exampleUrls, reviveSellers, shutdown };
 }
