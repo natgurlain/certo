@@ -1,7 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import {
   callIdOf, decodeHeader, ed25519FromSeed, encodeHeader, HDR_PAYMENT_REQUIRED, HDR_PAYMENT_RESPONSE, HDR_PAYMENT_SIGNATURE,
-  isQuoteId, newQuoteId, PAYMENT_SCHEME, receiptText, requestCanon, sha256Hex, signBase64, stakeFor, systemClock,
+  CLI_NAME, isQuoteId, MCP_SERVER_NAME, newQuoteId, PAYMENT_SCHEME, receiptText, REPO_URL, requestCanon, sha256Hex, signBase64, stakeFor, systemClock,
   type Clock, type Ed25519Key, type CertoChain, type PaymentRequired, type PaymentRequirement, type PaymentResponse,
   type PaymentSignature, type Receipt,
 } from '@certo/core';
@@ -23,7 +23,29 @@ export interface ServedCall {
   paymentResponse: string;
 }
 
+/**
+ * Served calls by call id, **in memory only**: a seller restart inside a refund
+ * window loses the responses, so a non-delivery claim on a call served before
+ * the restart cannot be cured (the buyer then gets a full refund plus the
+ * ruling fee from the bond). Keep the process up while windows are open.
+ */
 export type ServedStore = Map<string, Promise<ServedCall>>;
+
+/**
+ * Largest response body `protect()` signs, in bytes. The contract checks
+ * evidence sizes: a panel verdict (`resolve`) needs the body within
+ * `max_response` (6,144 bytes in the shipped config) and `cure`/`claim_rule`
+ * within 16 KiB. A larger signed body could not be defended: a buyer's
+ * content dispute would fall to the timeout default, and a non-delivery claim
+ * could not be cured (full refund plus ruling fee). So a larger body is not
+ * signed; the buyer gets a signed 500 instead, which refunds the price by rule
+ * and costs no ruling fee.
+ */
+export const MAX_SIGNED_BODY = 6_144;
+
+/** One-line hint in every 402 for clients that do not know the scheme. */
+export const SCHEME_HINT = `scheme ${PAYMENT_SCHEME}: payment goes through a NEAR bond contract with a refund window; `
+  + `pay with \`npx ${CLI_NAME} call <url>\` or the ${MCP_SERVER_NAME} MCP server`;
 
 export interface ProtectOptions {
   /** Chain client for the certo contract. */
@@ -39,6 +61,8 @@ export interface ProtectOptions {
   windowMs?: number;
   feeBps?: number;
   maxTimeoutSeconds?: number;
+  /** Largest body to sign (default and upper bound `MAX_SIGNED_BODY`). */
+  maxBodyBytes?: number;
   /** Shared with `createAnswerBot`; one is created if omitted. */
   store?: ServedStore;
   clock?: Clock;
@@ -81,6 +105,7 @@ export function protect(opts: ProtectOptions): ProtectMiddleware {
   const store: ServedStore = opts.store ?? new Map();
   const clock = opts.clock ?? systemClock;
   const chain = opts.contract;
+  const maxBody = Math.min(opts.maxBodyBytes ?? MAX_SIGNED_BODY, MAX_SIGNED_BODY);
 
   async function requirement(): Promise<PaymentRequirement> {
     let windowMs = opts.windowMs ?? 120_000;
@@ -101,14 +126,14 @@ export function protect(opts: ProtectOptions): ProtectMiddleware {
     return {
       scheme: PAYMENT_SCHEME, network: chain.network, amount: opts.price, asset: chain.tokenId, payTo: chain.contractId,
       maxTimeoutSeconds: opts.maxTimeoutSeconds ?? 60,
-      extra: { seller: opts.seller, quoteId: newQuoteId(), termsId: opts.termsId, windowMs, feeBps },
+      extra: { seller: opts.seller, quoteId: newQuoteId(), termsId: opts.termsId, windowMs, feeBps, docs: REPO_URL },
     };
   }
 
   async function paymentRequired(req: Request, res: Response, error?: string): Promise<void> {
     const pr: PaymentRequired = {
       x402Version: 2,
-      resource: { url: `${req.protocol}://${req.get('host') ?? 'localhost'}${req.originalUrl}` },
+      resource: { url: `${req.protocol}://${req.get('host') ?? 'localhost'}${req.originalUrl}`, description: SCHEME_HINT },
       accepts: [await requirement()],
     };
     json(res, 402, error ? { error, ...pr } : pr, { [HDR_PAYMENT_REQUIRED]: encodeHeader(pr) });
@@ -189,8 +214,16 @@ export function protect(opts: ProtectOptions): ProtectMiddleware {
         (res as { write: unknown }).write = origWrite;
         (res as { end: unknown }).end = origEnd;
         (res as { writeHead: unknown }).writeHead = origWriteHead;
+        let body = Buffer.concat(chunks);
         try {
-          const body = Buffer.concat(chunks);
+          if (body.length > maxBody) {
+            console.error(`${CLI_NAME} protect(): response of ${body.length} bytes for call ${callId} exceeds ${maxBody} bytes, `
+              + 'the largest the contract can judge; sent a signed 500 instead (the buyer can claim the price back by rule)');
+            body = Buffer.from(JSON.stringify({ error: `response too large to bond: ${body.length} bytes > ${maxBody}` }));
+            res.statusCode = 500;
+            deferredHead = undefined;
+            res.setHeader('Content-Type', 'application/json');
+          }
           if (deferredHead) {
             // apply headers given to writeHead(status, [message], headers)
             const h = deferredHead.find((x, i) => i > 0 && typeof x === 'object' && x !== null) as Record<string, string> | undefined;
@@ -220,7 +253,7 @@ export function protect(opts: ProtectOptions): ProtectMiddleware {
           store.delete(callId);
         }
         res.statusCode = res.statusCode || 200;
-        origEnd(Buffer.concat(chunks), done as undefined);
+        origEnd(body, done as undefined);
         return res;
       };
       next();

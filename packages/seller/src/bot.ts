@@ -17,13 +17,22 @@ export interface AnswerBotOptions {
 /**
  * The seller's answer bot: for every served call still on chain, answers a
  * content dispute with a fixed offer and cures a non-delivery claim. Drive it
- * with `tick()` (tests) or `start(intervalMs)`.
+ * with `tick()` (tests) or `start(intervalMs)`. A dispute counts as handled
+ * only after its transaction succeeded; a failed `answer`/`cure` is retried on
+ * the next tick (missing the answer deadline costs the seller a full refund
+ * plus the ruling fee). Ticks never overlap.
  */
 export function createAnswerBot(o: AnswerBotOptions) {
   const done = new Set<string>();
   let timer: ReturnType<typeof setInterval> | undefined;
+  let running: Promise<void> | undefined;
 
-  async function tick(): Promise<void> {
+  function tick(): Promise<void> {
+    running ??= sweep().finally(() => { running = undefined; });
+    return running;
+  }
+
+  async function sweep(): Promise<void> {
     for (const [callId, p] of o.store) {
       const served = await p.catch(() => undefined);
       if (!served) continue;
@@ -33,16 +42,16 @@ export function createAnswerBot(o: AnswerBotOptions) {
       if (done.has(key)) continue;
       try {
         if (call.status === 'Disputed') {
-          done.add(key);
           const tx = await o.chain.answer(callId, o.offerBps ?? 0);
+          done.add(key);
           o.onAction?.({ callId, action: 'answer', txHash: tx.txHash });
         } else if (call.status === 'NonDeliveryClaimed' && (o.cure ?? true)) {
-          done.add(key);
           const r = served.receipt;
           const tx = await o.chain.cure({
             call_id: callId, response_hash: r.responseHash, status_code: r.statusCode, served_at_ms: r.servedAtMs, sig: r.sig,
             response_body: served.body.toString('utf8'),
           });
+          done.add(key);
           o.onAction?.({ callId, action: 'cure', txHash: tx.txHash });
         }
       } catch (e) {
