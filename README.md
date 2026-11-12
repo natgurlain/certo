@@ -3,7 +3,7 @@
 **Agents pay instantly. Bad calls get refunded.** Built at NEAR HACKATHON (November 2026).
 
 - A seller of a paid API locks a bond in a NEAR contract and is **paid in the buyer's own transaction**. No escrow, no waiting.
-- For 120 s the buyer agent can get its money back **out of that bond**: by rule (HTTP 5xx, no delivery, broken schema, stale data) or, for an answer that is well-formed but wrong, by a panel of three AI models. Rule refunds are on for every seller; for answers no rule can catch, a seller can opt in to an experimental panel of three models, as both demo sellers do (see [Measured](#6-measured)).
+- For 120 s the buyer agent can get its money back **out of that bond**: by rule (HTTP 5xx, no delivery, broken schema, stale data) Rule refunds are on for every seller; for answers that are well-formed but wrong, which no rule can catch, a seller can opt in to an experimental panel of three AI models, as both demo sellers do (see [Measured](#6-measured)).
 - **No account can forge a vote.** The contract rebuilds each juror's prompt, hashes it, and checks three NEAR AI Cloud enclave signatures with `env::ed25519_verify` before the bond pays out.
 
 ![Scene 2: asked NEAR, got NEO; three signed votes, verified in the browser and by the contract; refund from the bond](apps/demo/web/screenshots/scene2-end.png)
@@ -93,7 +93,7 @@ A payment by an agent for an API call is final. If the response is an error, mis
 
 - **Panel timeout.** If no panel ruling arrives within 300 s of the seller's answer, a valid reveal above the seller's offer gets the seller's offer and the stake back. The buyer can always force a ruling itself: between 60 s and 300 s anyone may submit `resolve`, and only the buyer holds the reveal. Known gap: after the deadline the seller can settle without the reveal, which sends the buyer's stake to the treasury.
 - **No majority.** If the three jurors reach no majority, the buyer gets only the seller's offer and its stake back, and the split is counted on both parties' public records (`seller_record.split_disputes` in `certo_quote`); a seller who plants text that confuses the jurors keeps that payment but not a clean record. Known limit of the experimental panel, chosen over a midpoint that a buyer could farm by provoking splits in its own request. A split is final: the buyer cannot re-ask for a majority (G17).
-- **Re-asking.** A signature proves that an enclave serving that model gave this answer to this prompt, not that it was asked once. The resolver operator could ask again. Not solved.
+- **Re-asking and the free look.** A signature proves that an enclave serving that model gave this answer to this prompt, not that it was asked once. Whoever submits `resolve` (the resolver in the first 60 s, then the buyer, who holds the reveal) can ask each juror more than once and choose which answers to submit, or not submit at all and take the timeout rule, which returns the stake. So the stake deters only buyers who go through the panel service. Not solved; one reason the panel is experimental.
 - **Sealed offer.** The buyer reveals its offer to the panel service before `resolve`; the service is trusted not to pass it to the seller in that interval.
 - **Evidence is public.** Terms, request, response and the raw juror answers are transaction arguments. Not for private data.
 - **Size caps.** Terms and request 1,024 bytes; response 6,144 bytes for the panel and 16 KB for a cure. The seller middleware will not sign a larger response under Certo ([packages/seller/README.md](packages/seller/README.md)).
@@ -120,7 +120,7 @@ Every row has a test and a command. `cargo test` needs Rust; everything else nee
 | Offline check of recorded ballots and attestation binding | `scripts/verify-recorded.ts` | `make verify` |
 | TypeScript and Rust encoders agree byte for byte | `fixtures/vectors.json` | `npm test -w @certo/tests` |
 
-All tests: `make test` (217 TypeScript tests, including end-to-end on the sandbox) and `cargo test --workspace` (63 Rust tests).
+All tests: `make test` (209 TypeScript tests, including end-to-end on the sandbox) and `cargo test --workspace` (63 Rust tests).
 
 ## 5. Guards
 
@@ -145,8 +145,8 @@ Apple M2, macOS, nearcore 2.10.0 sandbox, 2026-11-11. Wall-clock times vary betw
 
 | Measure | Value | Reproduce |
 |---|---|---|
-| `make demo` / `make test` / `make guards` | 29 s / 46 s / 61 s | the commands |
-| `cargo test --workspace` | 62 tests, about 5 min | `cargo test --workspace` |
+| `make demo` / `make test` / `make guards` | 29–35 s / 46–59 s / 60–90 s | the commands |
+| `cargo test --workspace` | 63 tests, about 5 min | `cargo test --workspace` |
 | Panel, live: three answers with full reasoning and three enclave signatures | median 23 s, 95th percentile 120 s (kill test, reserve set); a single probe took 5.9 s | `make killtest`, `make probe` (need a key) |
 | Gas, `resolve` with three short test ballots | 10.64 TGas | `cargo test -p certo --test sandbox t08_panel_buyer_wins -- --nocapture` |
 | Gas, pay with payout | 11.56 TGas | `cargo test -p certo --test sandbox t06_pay_moves -- --nocapture` |

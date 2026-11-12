@@ -92,7 +92,7 @@ it imports `sha256` and `ed25519_verify` from `env` and none of the gas-key host
 functions. Checked on macOS arm64 only, 2026-11-11, nearcore 2.10.0:
 `cargo test --workspace` 63/63 (28 unit, 16 guard, 19 sandbox), `make guards` 10/10 in
 three consecutive runs (60 to 70 s), the G17 guard-revert (the `no_g17` build swapped in
-as `certo.wasm` fails G17; restored by hash), `npm test` 217/217 (the MCP sandbox file
+as `certo.wasm` fails G17; restored by hash), `npm test` 209/209 (the MCP sandbox file
 needed one rerun under load), `make verify` 375 real ballots and `make demo` `DEMO OK: 5/5`.
 Not re-run on nearcore 2.14.0 for this build. The Linux rows of the table were checked on the
 earlier builds below and not repeated.
