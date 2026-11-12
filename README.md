@@ -1,9 +1,9 @@
 # Certo
 
-**Agents pay instantly. Bad calls get refunded.** Built at NEAR HACKATHON (November 2026).
+**Agents pay instantly. Bad calls get refunded.** Guards try to stop a bad agent payment; Certo gets the money back when one goes through. Built at NEAR HACKATHON (November 2026).
 
 - A seller of a paid API locks a bond in a NEAR contract and is **paid in the buyer's own transaction**. No escrow, no waiting.
-- For 120 s the buyer agent can get its money back **out of that bond**: by rule (HTTP 5xx, no delivery, broken schema, stale data) Rule refunds are on for every seller; for answers that are well-formed but wrong, which no rule can catch, a seller can opt in to an experimental panel of three AI models, as both demo sellers do (see [Measured](#6-measured)).
+- For 120 s the buyer agent can get its money back **out of that bond**: by rule (HTTP 5xx, no delivery, broken schema, stale data). Rule refunds are on for every seller; for answers that are well-formed but wrong, which no rule can catch, a seller can opt in to an experimental panel of three AI models, as both demo sellers do (see [Measured](#6-measured)).
 - **No account can forge a vote.** The contract rebuilds each juror's prompt, hashes it, and checks three NEAR AI Cloud enclave signatures with `env::ed25519_verify` before the bond pays out.
 
 ![Scene 2: asked NEAR, got NEO; three signed votes, verified in the browser and by the contract; refund from the bond](apps/demo/web/screenshots/scene2-end.png)
@@ -32,7 +32,7 @@ Scene 5 forged vote: one byte of Qwen's answer Y → X changed after signing; ce
 DEMO OK: 5/5 scenes, 3/3 juror signatures verified on chain
 ```
 
-`make guards` ends with `GUARDS OK: 10/10 guards rejected on the real contract and bypassed when removed`.
+`make guards` ends with `GUARDS OK: 10/10 guards rejected on the real contract and bypassed when removed`. A full `make demo` transcript is in [docs/DEMO_TRANSCRIPT.md](docs/DEMO_TRANSCRIPT.md), the guard table in [docs/GUARDS.md](docs/GUARDS.md).
 
 The juror answers in `make demo` are **recorded**: real answers and enclave signatures from NEAR AI Cloud, captured on 2026-11-11 and stored in `fixtures/panel/`. The contract verifies those signatures in every run, and the page verifies them again in your browser (WebCrypto). Replayed, a ruling appears in a few seconds; asked live, the panel takes a median of 23 s (see [Measured](#6-measured)). To ask the models live: put `NEARAI_API_KEY=…` in `.env` and run `PANEL_MODE=live make demo`.
 
@@ -181,9 +181,11 @@ x402r and KAMIYO x402Resolve hold the buyer's payment in escrow and rely on an a
 | Pact Network (Arbitrum Sepolia) | At once | No | Rules | Yes |
 | Inari (NEAR) | After worker signature | No | Rule | Yes |
 | Agora (NEAR) | After review | Software jobs | 3 TEE reviewers, then a DAO | Partly |
+| SecondEyes (NEAR) | Before payment, if the judge approves | Blocks a bad payment; no refund after it | 1 NEAR AI judge, verified in the contract | Yes |
+| Beeline (NEAR) | Before payment, if the reviewer approves | Blocks a bad payment; no refund after it | 1 NEAR AI reviewer, verified in the vault | Yes |
 | **Certo** | **In the paying transaction** | **Yes** | Rules, then 3 models of 3 families | **Yes** |
 
-Ten entries of this hackathon verify a NEAR AI Cloud signature or attestation; in their READMEs, none verifies it inside a contract for a money decision `[NV: READMEs searched, not code]`. Entries named Writ, TabWrit, PayGuard, AgentPay Guard, PayShield-NEAR, Bonded, AgentBond and Taskbond had no README to read and were not compared. <!-- FILL: one sentence each after reading their X posts, or keep the sentence above --> Method and sources: [docs/DESIGN.md](docs/DESIGN.md) 5.3–5.4. Not built: an adapter to x402's `exact` scheme, refunds in another asset through NEAR Intents, a panel caller inside an enclave.
+SecondEyes and Beeline (this hackathon) also verify a NEAR AI Cloud `provider_tee` signature inside a contract over a request the contract rebuilds, as Certo does; they use it to approve or block a payment before it is made. Certo uses the same check after the payment, to decide a refund out of a seller's bond, and adds the rule tier, a three-model panel and the seller's bond and record `[NV: READMEs read, not code]`. Entries named Writ, TabWrit, PayGuard, AgentPay Guard, PayShield-NEAR, Bonded, AgentBond and Taskbond had no README to read and were not compared. <!-- FILL: one sentence each after reading their X posts, or keep the sentence above --> Method and sources: [docs/DESIGN.md](docs/DESIGN.md) 5.3–5.4. Not built: an adapter to x402's `exact` scheme, refunds in another asset through NEAR Intents, a panel caller inside an enclave.
 
 ## 9. Hackathon disclosure
 
