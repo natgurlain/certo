@@ -1,0 +1,25 @@
+# Runs what a judge runs, on Linux x86-64 (glibc 2.35), from a clean checkout. No keys needed.
+name: ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  judge-path:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: make demo
+        run: make demo
+      - name: make verify
+        run: make verify
+      - name: make guards
+        run: make guards
+      - name: make test
+        run: make test
