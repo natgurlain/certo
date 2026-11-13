@@ -185,9 +185,37 @@ function within<T>(p: Promise<T>, deadline: number, hash: string, timeoutMs: num
  * connection), as opposed to rejecting it (`InvalidChain`, `InvalidNonce`, ...), which means it
  * was never admitted.
  */
+/** True if a public RPC refused the request for its rate limit (fastnear answers JSON-RPC code -429). */
+export function isRateLimited(err: unknown): boolean {
+  const e = err as { cause?: unknown; message?: string; code?: unknown };
+  return e?.cause === 429 || e?.code === -429 || /rate limit|\b-?429\b/i.test(String(e?.message ?? err));
+}
+
+/** A dropped connection or a gateway error on the way to a public RPC (worth repeating a read). */
+function isTransient(err: unknown): boolean {
+  const e = err as { cause?: unknown; message?: string };
+  return [502, 503, 504].includes(e?.cause as number) || /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|socket hang up/i.test(String(e?.message ?? err));
+}
+
+/**
+ * Calls `fn` (a read: safe to repeat), waiting 1, 2, 4 and 8 s after a rate-limit refusal or a
+ * dropped connection from a public RPC; other errors pass through. Not for sending transactions:
+ * `signAndSend` has its own rules for that.
+ */
+export async function rateLimitRetry<T>(fn: () => Promise<T>, waitsMs: number[] = [1000, 2000, 4000, 8000]): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i >= waitsMs.length || !(isRateLimited(err) || isTransient(err))) throw err;
+      await sleep(waitsMs[i]!);
+    }
+  }
+}
+
 function noVerdict(err: unknown): boolean {
   const e = err as { cause?: unknown; type?: string; message?: string };
-  if (e?.type === 'RetriesExceeded') return true;
+  if (e?.type === 'RetriesExceeded' || isRateLimited(err)) return true;
   if (e?.type) return /timeout/i.test(`${e.type} ${e.message}`);
   return [408, 500, 502, 503, 504].includes(e?.cause as number) || /timeout|fetch|ECONN|socket/i.test(String(e?.message ?? err));
 }
@@ -219,7 +247,7 @@ export async function signAndSend(account: Account, params: SendParams, o: { tri
     const hash = base58Encode(hashBytes);
     let outcome: Outcome;
     try {
-      outcome = await within(sendUntilExecuted(rpc, account.accountId, hash, signed, deadline), deadline, hash, timeoutMs);
+      outcome = await within(sendUntilExecuted(rpc, account.accountId, hash, signed, deadline, waitLevelFor(rpc)), deadline, hash, timeoutMs);
     } catch (err) {
       if (i < tries && (err as { type?: string }).type === 'InvalidChain') {
         await sleep(300 * i);
@@ -239,23 +267,33 @@ export async function signAndSend(account: Account, params: SendParams, o: { tri
 async function buildTx(account: Account, params: SendParams) {
   const pk = await account.getSigner()!.getPublicKey();
   const [key, block] = await Promise.all([
-    account.provider.viewAccessKey(account.accountId, pk, { finality: 'optimistic' }),
-    account.provider.viewBlock({ finality: 'final' }),
+    rateLimitRetry(() => account.provider.viewAccessKey(account.accountId, pk, { finality: 'optimistic' })),
+    rateLimitRetry(() => account.provider.viewBlock({ finality: 'final' })),
   ]);
   return createTransaction(account.accountId, pk, params.receiverId, BigInt(key.nonce) + 1n, params.actions, base58Decode(block.header.hash));
 }
 
 /** Send `signed` and wait for its execution; on no verdict, look it up by hash, else resend the same bytes. */
-async function sendUntilExecuted(rpc: JsonRpcProvider, sender: string, hash: string, signed: Parameters<JsonRpcProvider['sendTransactionUntil']>[0], deadline: number): Promise<Outcome> {
+/**
+ * How long to wait for a transaction. On the local sandbox, `EXECUTED_OPTIMISTIC`. On a public
+ * network (any RPC that is not localhost), `FINAL`: testnet RPC endpoints are load-balanced, and a
+ * read sent right after an optimistic execution can reach a node that has not seen it yet
+ * (seen as "Cannot find contract code" and a missing seller right after `register_seller`).
+ */
+export function waitLevelFor(rpc: JsonRpcProvider): 'EXECUTED_OPTIMISTIC' | 'FINAL' {
+  return /\/\/(127\.0\.0\.1|localhost|\[::1\])[:/]/.test(rpc.connection.url) ? 'EXECUTED_OPTIMISTIC' : 'FINAL';
+}
+
+async function sendUntilExecuted(rpc: JsonRpcProvider, sender: string, hash: string, signed: Parameters<JsonRpcProvider['sendTransactionUntil']>[0], deadline: number, wait: 'EXECUTED_OPTIMISTIC' | 'FINAL' = 'EXECUTED_OPTIMISTIC'): Promise<Outcome> {
   for (let first = true; ; first = false) {
     try {
-      if (first) return await rpc.sendTransactionUntil(signed, 'EXECUTED_OPTIMISTIC');
+      if (first) return await rpc.sendTransactionUntil(signed, wait);
       try {
-        return await rpc.txStatus(hash, sender, 'EXECUTED_OPTIMISTIC');
+        return await rpc.txStatus(hash, sender, wait);
       } catch (err) {
         if (noVerdict(err)) throw err;
         // the node does not know the transaction (dropped before admission): same bytes again
-        return await rpc.sendTransactionUntil(signed, 'EXECUTED_OPTIMISTIC');
+        return await rpc.sendTransactionUntil(signed, wait);
       }
     } catch (err) {
       if (!noVerdict(err) || Date.now() >= deadline) throw err;
@@ -292,7 +330,7 @@ export class NearCertoChain implements CertoChain {
   }
 
   async view<T>(method: string, args: Record<string, unknown> = {}, contractId = this.contractId): Promise<T> {
-    return (await this.provider.callFunction(contractId, method, args)) as T;
+    return (await rateLimitRetry(() => this.provider.callFunction(contractId, method, args))) as T;
   }
 
   /** Signed function call; throws `ContractError` if the transaction's own receipt fails. */

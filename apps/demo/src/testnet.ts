@@ -15,7 +15,7 @@ import { JsonRpcProvider } from '@near-js/providers';
 import { KeyPairSigner } from '@near-js/signers';
 import { actionCreators } from '@near-js/transactions';
 import {
-  ENV_PREFIX, FEE_BPS, ONE_NEAR, PRODUCT_ID, TGAS, ed25519FromSeed, formatUsdc, sha256, toHex, type Ed25519Key,
+  ENV_PREFIX, FEE_BPS, ONE_NEAR, PRODUCT_ID, TGAS, ed25519FromSeed, formatUsdc, rateLimitRetry, sha256, toHex, type Ed25519Key,
 } from '@certo/core';
 import { loadDemo, realKeys, syntheticJurorsFile, type PanelPlan } from './fixtures.js';
 import { demoConfig, repoFile, WASM, type JurorArg } from './sandbox.js';
@@ -441,7 +441,7 @@ export function testnetWorld(cfg: TestnetConfig, d: Deployed): DemoWorld {
     },
     balance: async (accountId) => BigInt(await viewer.ftBalanceOf(accountId)),
     nowMs: async () => {
-      const b = await provider.viewBlock({ finality: 'optimistic' });
+      const b = await rateLimitRetry(() => provider.viewBlock({ finality: 'optimistic' }));
       return Math.floor(Number(BigInt(b.header.timestamp_nanosec) / 1_000_000n));
     },
     receiptKey: (label) => d.receiptKeys[label as 'chainfacts' | 'cheapfacts'] ?? (() => { throw new Error(`no receipt key for ${label}`); })(),

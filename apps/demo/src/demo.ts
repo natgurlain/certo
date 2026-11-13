@@ -315,7 +315,7 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
   const startSeller = async (label: (typeof ACCOUNTS.sellers)[number], port?: number) => {
     const s = await startDemoSeller({
       id: world.id(label), chain: clientOf(label), receiptKey: world.receiptKey(label), termsId: fx.terms.terms_id, price: fx.price,
-      responses: { [fx.request]: fx.responses[label] }, offerBps: 0, onBot: botLog(label), botPollMs: testnet ? 1500 : 400, port,
+      responses: { [fx.request]: fx.responses[label] }, offerBps: 0, onBot: botLog(label), botPollMs: testnet ? 4000 : 400, port,
       onPaid: (served) => void agentPaid(label, served),
     });
     sellers[label] = s;

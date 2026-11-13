@@ -5,7 +5,7 @@ import { Account } from '@near-js/accounts';
 import { KeyPair } from '@near-js/crypto';
 import { JsonRpcProvider } from '@near-js/providers';
 import { KeyPairSigner } from '@near-js/signers';
-import { NearCertoChain, sha256Hex, signAndSend, toBase64, fromHex, TxTimeoutError } from '../src/index.js';
+import { NearCertoChain, sha256Hex, signAndSend, toBase64, fromHex, TxTimeoutError, waitLevelFor, rateLimitRetry } from '../src/index.js';
 
 // Minimal JSON-RPC stand-in answering `query/call_function` like a NEAR node.
 const views: Record<string, (args: Record<string, unknown>) => unknown> = {
@@ -141,5 +141,28 @@ describe('signAndSend (scripted RPC)', () => {
     const failed = { ...OUTCOME, status: { Failure: { ActionError: { kind: 'x' } } } };
     await expect(run({ send_tx: [{ result: failed }] })).rejects.toMatchObject({ type: 'TxFailure' });
     expect(await run({ send_tx: [{ result: failed }] }, undefined, false)).toEqual(failed);
+  });
+});
+
+describe('waitLevelFor', () => {
+  it('waits for finality on public networks, optimistic execution on a local sandbox', () => {
+    const at = (url: string) => waitLevelFor(new JsonRpcProvider({ url }));
+    expect(at('http://127.0.0.1:3030')).toBe('EXECUTED_OPTIMISTIC');
+    expect(at('http://localhost:3030/')).toBe('EXECUTED_OPTIMISTIC');
+    expect(at('https://rpc.testnet.fastnear.com')).toBe('FINAL');
+    expect(at('https://rpc.mainnet.near.org')).toBe('FINAL');
+  });
+});
+
+describe('rateLimitRetry', () => {
+  it('retries a rate-limit refusal and passes other errors through', async () => {
+    let n = 0;
+    const flaky = async () => { if (++n < 3) throw new Error('{"code": -429, "message": "Rate limits exceeded"}'); return 'ok'; };
+    expect(await rateLimitRetry(flaky, [1, 1, 1])).toBe('ok');
+    expect(n).toBe(3);
+    await expect(rateLimitRetry(async () => { throw new Error('E_STATUS'); }, [1])).rejects.toThrow('E_STATUS');
+    await expect(rateLimitRetry(async () => { throw new Error('Rate limits exceeded'); }, [1])).rejects.toThrow('Rate limits');
+    let m = 0;
+    expect(await rateLimitRetry(async () => { if (++m < 2) throw new TypeError('fetch failed'); return 'ok'; }, [1])).toBe('ok');
   });
 });
