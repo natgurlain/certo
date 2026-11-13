@@ -62,8 +62,13 @@ const r = await runDemo({
   process.exit(1);
 });
 console.log(`(${(r.elapsedMs / 1000).toFixed(1)} s)`);
-r.feed.save(feedOut);
-console.log(`feed saved: ${feedOut} (the page plays it from static files: copy apps/demo/web/ and put it next to index.html as feed.json)`);
+try {
+  r.feed.save(feedOut);
+  console.log(`feed saved: ${feedOut} (the page plays it from static files: copy apps/demo/web/ and put it next to index.html as feed.json)`);
+} catch (e) {
+  // the run's result does not depend on the replay file (e.g. a read-only home directory)
+  console.log(`feed not saved (${(e as Error).message}); set CERTO_HOME or --feed-out to a writable path to keep a replay`);
+}
 if (!keepOpen) {
   await r.shutdown();
   process.exit(r.ok ? 0 : 1);

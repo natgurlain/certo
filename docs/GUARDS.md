@@ -40,32 +40,23 @@ Juror keys in this test are generated test keys; the attacks do not depend on NE
 
 ## Output
 
-Recorded on 2026-11-11 against `res/certo.wasm` SHA-256 `1f6ab2b7…` (61.3 s, macOS arm64, nearcore 2.10.0 sandbox; last of six consecutive 9/9 runs, 58.2 to 62.5 s; at most three guard pairs run at once):
+Recorded on 2026-11-13 against `res/certo.wasm` SHA-256 `aca96429…` (87.5 s, macOS arm64, nearcore 2.10.0 sandbox, at most three guard pairs at once):
 
 ```text
-G2 exposure limit: ok (7.6 s)
-G1 juror signature: ok (7.8 s)
-G3 one dispute per call: ok (8.2 s)
-G5 receipt signature: ok (7.4 s)
-G6 bond withdrawal: ok (7.4 s)
-G7 evidence binding: ok (9.0 s)
-G8 prompt binding: ok (6.6 s)
-G4 dispute window: ok (17.4 s)
-G16 panel timeout: ok (18.4 s)
+guard  check                 real contract (res/certo.wasm)                            guard removed (res/guards/certo_no_gN.wasm)                                    verdict
+-----  --------------------  --------------------------------------------------------  -----------------------------------------------------------------------------  --------------------------------
+G1     juror signature       rejected E_BALLOT_SIG                                     attack succeeded: forged vote counted, winner buyer                            rejected / succeeds-when-removed
+G2     exposure limit        rejected E_EXPOSURE                                       attack succeeded: third payment taken: reserved 1.260000 > bond 1.000000       rejected / succeeds-when-removed
+G3     one dispute per call  rejected E_STATUS                                         attack succeeded: stake taken twice (0.020000 more)                            rejected / succeeds-when-removed
+G4     dispute window        rejected E_WINDOW_CLOSED                                  attack succeeded: dispute opened after the window (status NonDeliveryClaimed)  rejected / succeeds-when-removed
+G5     receipt signature     rejected E_BAD_RECEIPT_SIG                                attack succeeded: dispute opened on invented evidence (status Disputed)        rejected / succeeds-when-removed
+G6     bond withdrawal       rejected E_WITHDRAW_EXPOSED                               attack succeeded: bond 0.419999 < reserved 0.420000                            rejected / succeeds-when-removed
+G7     evidence binding      rejected E_EVIDENCE_HASH                                  attack succeeded: panel ruled on substituted evidence, winner buyer            rejected / succeeds-when-removed
+G8     prompt binding        rejected E_BALLOT_SIG                                     attack succeeded: ballots for another prompt accepted, winner buyer            rejected / succeeds-when-removed
+G16    panel timeout         paid the seller's offer (0 %), stake back                 attack succeeded: buyer took 0.200000 of 0.400000 with no verdict (midpoint)   rejected / succeeds-when-removed
+G17    split panel           paid the seller's offer (0 %), stake back, split counted  attack succeeded: buyer took 0.200000 of 0.400000 on a split panel (midpoint)  rejected / succeeds-when-removed
 
-guard  check                 real contract (res/certo.wasm)             guard removed (res/guards/certo_no_gN.wasm)                                    verdict
------  --------------------  -----------------------------------------  -----------------------------------------------------------------------------  --------------------------------
-G1     juror signature       rejected E_BALLOT_SIG                      attack succeeded: forged vote counted, winner buyer                            rejected / succeeds-when-removed
-G2     exposure limit        rejected E_EXPOSURE                        attack succeeded: third payment taken: reserved 1.260000 > bond 1.000000       rejected / succeeds-when-removed
-G3     one dispute per call  rejected E_STATUS                          attack succeeded: stake taken twice (0.020000 more)                            rejected / succeeds-when-removed
-G4     dispute window        rejected E_WINDOW_CLOSED                   attack succeeded: dispute opened after the window (status NonDeliveryClaimed)  rejected / succeeds-when-removed
-G5     receipt signature     rejected E_BAD_RECEIPT_SIG                 attack succeeded: dispute opened on invented evidence (status Disputed)        rejected / succeeds-when-removed
-G6     bond withdrawal       rejected E_WITHDRAW_EXPOSED                attack succeeded: bond 0.419999 < reserved 0.420000                            rejected / succeeds-when-removed
-G7     evidence binding      rejected E_EVIDENCE_HASH                   attack succeeded: panel ruled on substituted evidence, winner buyer            rejected / succeeds-when-removed
-G8     prompt binding        rejected E_BALLOT_SIG                      attack succeeded: ballots for another prompt accepted, winner buyer            rejected / succeeds-when-removed
-G16    panel timeout         paid the seller's offer (0 %), stake back  attack succeeded: buyer took 0.200000 of 0.400000 with no verdict (midpoint)   rejected / succeeds-when-removed
-
-GUARDS OK: 9/9 guards rejected on the real contract and bypassed when removed (61.3 s)
+GUARDS OK: 10/10 guards rejected on the real contract and bypassed when removed (87.5 s)
 ```
 
 Run a subset with `npx tsx tests/guards/run.ts --only G1,G17` (or `make guards ARGS="--only G1,G17"`).
