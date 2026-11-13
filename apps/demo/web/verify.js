@@ -76,10 +76,12 @@ export const fingerprint = (hex) => (hex && hex.length > 12 ? `${hex.slice(0, 8)
 // ---------------------------------------------------------------------------
 export function makeRpc({ fetch: f = globalThis.fetch.bind(globalThis), sleep = (ms) => new Promise((r) => setTimeout(r, ms)), retries = 2, net = TESTNET } = {}) {
   const used = new Set();
+  const throttled = new Set(); // endpoints still answering 429 after the retries go last for the rest of the run
   async function post(url, method, params) {
     for (let attempt = 0; ; attempt++) {
       const r = await f(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "certo", method, params }) });
-      if (r.status === 429 && attempt < retries) { await sleep(700 * 2 ** attempt); continue; }
+      if (r.status === 429 && attempt < retries && !throttled.has(url)) { await sleep(700 * 2 ** attempt); continue; }
+      if (r.status === 429) throttled.add(url);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json();
       if (j.error) throw new Error(j.error.cause?.name ?? j.error.data ?? j.error.message ?? "RPC error");
@@ -90,7 +92,7 @@ export function makeRpc({ fetch: f = globalThis.fetch.bind(globalThis), sleep = 
   }
   async function first(urls, method, paramsList) {
     const errs = [];
-    for (const url of urls) {
+    for (const url of [...urls.filter((u) => !throttled.has(u)), ...urls.filter((u) => throttled.has(u))]) {
       for (const params of paramsList) {
         try { return await post(url, method, params); } catch (e) { errs.push(`${new URL(url).host}: ${e.message}`); }
       }
@@ -203,7 +205,7 @@ export async function verifyOnChain(feed, { rpc = makeRpc(), subtle = globalThis
   if (!reg) return out;
 
   // 4. the resolve transaction: arguments (evidence, ballots) and the events it logged
-  const res = await step("tx", "resolve transaction", async () => {
+  const res = await step("tx", "Ruling transaction", async () => {
     const tx = await rpc.tx(c.resolveTx, [reg.resolver, c.buyer, c.seller]);
     const { method, args } = fnCall(tx);
     const t = tx.transaction;
@@ -215,7 +217,7 @@ export async function verifyOnChain(feed, { rpc = makeRpc(), subtle = globalThis
     const bv = evs.find((e) => e.event === "ballots_verified");
     const dr = evs.find((e) => e.event === "dispute_resolved");
     if (!Array.isArray(args.ballots) || args.ballots.length !== 3) throw new Error("resolve has no three ballots");
-    check("tx", "resolve transaction", !!(bv && dr),
+    check("tx", "Ruling transaction", !!(bv && dr),
       `${method} by ${t.signer_id} on ${t.receiver_id}, succeeded; events ${evs.map((e) => e.event).join(", ") || "none"}${bv && dr ? "" : " (ballots_verified or dispute_resolved missing)"}`);
     return { args, bv: bv?.data, dr: dr?.data, signer: t.signer_id };
   });

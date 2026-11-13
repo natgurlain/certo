@@ -1,4 +1,5 @@
 import { countdownMs, dwellMs } from "./pace.js";
+import { TESTNET, findCase, fingerprint, verifyOnChain } from "./verify.js";
 
 // ---------------------------------------------------------------------------
 // Product naming. The ONLY place the name, tagline and badge text live
@@ -100,6 +101,7 @@ const vnow = () => performance.now() * (speed || 1);
 function receive(m) {
   received.push(m);
   queue.push(m);
+  renderPhone();
   pump();
 }
 
@@ -356,6 +358,7 @@ function renderHeader() {
     $("mode-panel").textContent = label;
     $("mode-net").textContent = m.network === "testnet" ? "Chain: NEAR testnet" : m.network === "sandbox" ? "Chain: local NEAR sandbox" : `Chain: ${m.network ?? "?"}`;
   }
+  $("verify").classList.toggle("hidden", !onTestnet());
   // every scene the feed holds so far (a recorded feed: all of them), so the row does not change mid-run
   const ns = received.filter((m) => m.kind === "scene").map((m) => Number(m.n));
   const max = Math.max(4, ...ns);
@@ -647,6 +650,84 @@ function summarize(data) {
 }
 
 // ---------------------------------------------------------------------------
+// "Don't trust this page": the browser re-checks the testnet run on chain (verify.js)
+// ---------------------------------------------------------------------------
+const onTestnet = () => received.some((m) => m.kind === "mode" && m.network === "testnet");
+const short = (h) => (h && h.length > 14 ? `${h.slice(0, 8)}…` : String(h ?? ""));
+const nbTx = (h) => `${TESTNET.explorer}/txns/${encodeURIComponent(h)}`;
+const nbAcct = (a) => `${TESTNET.explorer}/address/${encodeURIComponent(a)}`;
+const mark = (ok) => (ok === true ? '<b class="vk ok">✓</b>' : ok === false ? '<b class="vk bad">✕</b>' : '<b class="vk na">–</b>');
+let vrun = 0;
+
+async function openVerify() {
+  if (!onTestnet()) return;
+  $("verify-panel").classList.remove("hidden");
+  const run = ++vrun;
+  renderVerify({ checks: [], jurors: [], events: [], running: "Starting…" });
+  const out = await verifyOnChain(received, { onStep: (o) => { if (run === vrun) renderVerify(o); } });
+  if (run === vrun) renderVerify({ ...out, finished: true });
+}
+function closeVerify() {
+  vrun++;
+  $("verify-panel").classList.add("hidden");
+}
+
+/** What the browser computed, step by step; from the recorded feed only the transaction hashes, call id and account names. */
+function renderVerify(o) {
+  const c = o.case, contract = o.contract;
+  const sigs = o.jurors.filter((j) => j.sig === true).length;
+  const failed = o.checks.find((x) => x.ok === false);
+  let head;
+  if (!o.finished) head = `<div class="vstatus run">${esc(o.running ?? "Checking…")}</div>`;
+  else if (sigs === 3 && !failed) head = `<div class="vstatus ok">✓ 3 of 3 juror signatures valid, against keys read from the contract just now</div>`;
+  else head = `<div class="vstatus bad">✕ ${o.jurors.length ? `${sigs} of 3 juror signatures valid` : "Not verified"}${failed ? `; failed: ${esc(failed.label)}` : ""}</div>`;
+  const checks = o.checks.map((x) => `<li>${mark(x.ok)}<span class="vl">${esc(x.label)}</span><span class="vd">${esc(x.detail ?? "")}</span></li>`).join("");
+  const rows = o.jurors.map((j) => `<tr>
+      <td><b>${j.index + 1}</b> ${esc(j.model)}</td>
+      <td class="mono" title="${esc(j.pubkey)}">${esc(fingerprint(j.pubkey))}</td>
+      <td>${mark(j.prompt)} <span class="mono" title="${esc(j.requestSha256 ?? "")}">${esc(short(j.requestSha256))}</span></td>
+      <td>${mark(j.answer)}</td>
+      <td>${mark(j.sig)} ${j.sig === true ? "valid" : j.sig === false ? "invalid" : esc(j.error ?? "not checked")}</td>
+      <td class="vvote ${esc(j.vote)}">${esc(j.vote)}${j.loggedVote && j.loggedVote !== j.vote ? ` <span class="vd">(logged ${esc(j.loggedVote)})</span>` : ""}</td>
+    </tr>`).join("");
+  const table = o.jurors.length ? `<table class="vtable"><thead><tr><th>Juror (model id read from chain)</th><th>Key read from chain</th><th>Prompt rebuilt here</th><th>Answer hash</th><th>Signature</th><th>Vote</th></tr></thead><tbody>${rows}</tbody></table>` : "";
+  const evs = o.events.length ? `<div class="vevents"><span class="vl">Events in the transaction</span> ${o.events.map((e) => `<code>${esc(e.event)}</code> <span class="vd">${esc(eventSummary(e))}</span>`).join(" · ")}</div>` : "";
+  const links = [c && `<a href="${nbTx(c.resolveTx)}" target="_blank" rel="noopener">resolve transaction ${esc(short(c.resolveTx))} on nearblocks</a>`, contract && `<a href="${nbAcct(contract)}" target="_blank" rel="noopener">contract ${esc(contract)} on nearblocks</a>`].filter(Boolean).join(" · ");
+  const hosts = o.hosts?.size ? [...o.hosts].join(", ") : "";
+  const notChecked = o.finished ? `<div class="vnote">Not checked here: that each key belongs to a NEAR AI enclave (the TDX attestation is checked offline by <code>make verify</code>; Intel and NVIDIA certificate chains are not verified anywhere, see docs/VERIFY.md). The contract owner registers the juror keys.</div>` : "";
+  $("verify-card").innerHTML = `
+    <div class="vhead"><h3>Checked against NEAR testnet, from this browser</h3><button class="replay" type="button" id="verify-close" title="Close (Esc)">Close</button></div>
+    <div class="vsub">${hosts ? `Read just now from ${esc(hosts)}; prompts rebuilt and signatures checked here (WebCrypto Ed25519). From the page's recording only the transaction hashes, the call id and the account names are taken.` : o.finished ? "Nothing could be read from the public testnet RPC, so nothing here is verified." : "Asking the public testnet RPC…"}</div>
+    ${head}<ul class="vchecks">${checks}</ul>${table}${evs}<div class="vlinks">${links}</div>${notChecked}`;
+  $("verify-close").addEventListener("click", closeVerify);
+}
+
+function eventSummary(e) {
+  const d = e.data ?? {};
+  if (e.event === "ballots_verified") return `epoch ${d.epoch}, ${(d.kinds ?? []).length} ballots, votes ${(d.votes ?? []).join("/")}`;
+  if (e.event === "dispute_resolved") return `tier ${d.tier}${d.winner ? `, ${d.winner} wins` : ""}, refund ${dec(Number(d.refund ?? 0) / 1e6)}`;
+  return "";
+}
+
+// ---------------------------------------------------------------------------
+// phones: the stage needs ~900 px; below that (style.css) a short summary of the run instead
+// ---------------------------------------------------------------------------
+function renderPhone() {
+  const mode = received.find((m) => m.kind === "mode");
+  const where = mode?.network === "testnet" ? "NEAR testnet" : mode?.network === "sandbox" ? "a local NEAR sandbox" : mode?.network;
+  $("phone-mode").textContent = mode ? `Recorded on ${where}${mode.panel === "replay" ? ", with real NEAR AI juror answers and signatures" : ""}.` : "";
+  $("phone-facts").innerHTML = received.filter((m) => m.kind === "scene" && m.status !== "start")
+    .map((m) => `<li><b>${esc(SCENE_SHORT[m.n] ?? m.title)}.</b> ${esc(m.caption ?? m.line ?? m.title)}</li>`).join("");
+  $("phone-done").textContent = received.find((m) => m.kind === "done")?.summary ?? "";
+  let c = null;
+  if (mode?.network === "testnet") { try { c = findCase(received); } catch { c = null; } }
+  $("phone-links").innerHTML = [
+    c && `<li><a href="${nbTx(c.resolveTx)}">The scene ${esc(c.scene)} refund on NEAR testnet</a>: three NEAR AI signatures verified by the contract</li>`,
+    BRAND.repoUrl && `<li><a href="${esc(BRAND.repoUrl)}">${esc(BRAND.repoUrl.replace(/^https?:\/\//, ""))}</a>: code, README, how to run it</li>`,
+  ].filter(Boolean).join("");
+}
+
+// ---------------------------------------------------------------------------
 // motion
 // ---------------------------------------------------------------------------
 function fly(text, fromEl, toEl) {
@@ -716,7 +797,10 @@ if (introParam === "0") $("intro").classList.add("hidden");
 else if (introParam) introMinUntil = Date.now() + Number(introParam) * 1000;
 if (params.has("end")) $("endcard").classList.remove("hidden");
 $("replay").addEventListener("click", replay);
+$("verify").addEventListener("click", openVerify);
+$("verify-panel").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeVerify(); });
 window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeVerify();
   if (e.key === "r" || e.key === "R") replay();
   if (e.key === "e" || e.key === "E") $("endcard").classList.toggle("hidden");
   if (e.key === "i" || e.key === "I") $("intro").classList.toggle("hidden");

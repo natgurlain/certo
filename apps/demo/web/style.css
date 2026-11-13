@@ -232,3 +232,54 @@ label, .label { font-size: 18px; color: var(--muted); display: block; }
 @keyframes pulse { 50% { opacity: .45; } }
 /* make playground: a third buyer card (the judge's agent); the inactive cards drop their log lines so the paid call stays in view */
 #buyers:has(.buyer:nth-child(3)) .buyer.dim .log { display: none; }
+
+/* ---------- "Don't trust this page": verify on NEAR testnet (verify.js) ---------- */
+.verify { flex: none; margin-left: 20px; font: inherit; font-size: 19px; font-weight: 800; color: var(--good); background: rgba(70,224,143,.10); border: 2px solid var(--good); border-radius: 10px; padding: 6px 16px; cursor: pointer; white-space: nowrap; }
+.verify:hover { background: rgba(70,224,143,.22); }
+.verify.hidden { display: none; }
+.vpanel { background: rgba(0,0,0,.78); transition: opacity .25s ease; text-align: left; z-index: 20; }
+.vcard { width: 1500px; max-height: 960px; overflow: auto; background: var(--card); border: 2px solid var(--line); border-radius: 18px; padding: 26px 32px; box-shadow: 0 20px 80px rgba(0,0,0,.6); }
+.vhead { display: flex; align-items: center; gap: 16px; }
+.vhead h3 { margin: 0; font-size: 30px; font-weight: 800; flex: 1; }
+.vsub { font-size: 18px; color: var(--muted); margin-top: 6px; }
+.vstatus { font-size: 26px; font-weight: 800; margin: 16px 0 10px; }
+.vstatus.ok { color: var(--good); }
+.vstatus.bad { color: var(--bad); }
+.vstatus.run { color: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+.vchecks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.vchecks li { display: grid; grid-template-columns: 34px 250px minmax(0, 1fr); gap: 10px; align-items: baseline; font-size: 19px; }
+.vl { font-weight: 700; }
+.vd { color: var(--muted); font-size: 18px; overflow-wrap: anywhere; }
+.vk { font-size: 22px; }
+.vk.ok { color: var(--good); }
+.vk.bad { color: var(--bad); }
+.vk.na { color: var(--muted); }
+.vtable { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 19px; }
+.vtable th { text-align: left; font-size: 16px; font-weight: 600; color: var(--muted); padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.vtable td { padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.vtable .mono { font-size: 18px; }
+.vvote { font-weight: 800; text-transform: uppercase; }
+.vvote.buyer { color: var(--buyer); }
+.vvote.seller { color: var(--seller); }
+.vevents { margin-top: 14px; font-size: 19px; }
+.vevents code { color: var(--panel); font-weight: 700; }
+.vlinks { margin-top: 12px; font-size: 19px; }
+.vlinks a, .phone a { color: var(--buyer); }
+.vnote { margin-top: 14px; font-size: 17px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
+
+/* ---------- phones: no 1920x1080 stage below ~900 px, a short summary instead ---------- */
+.phone { display: none; }
+@media (max-width: 899px) {
+  html, body { overflow: auto; background: var(--bg); height: auto; }
+  #stage { display: none; }
+  .phone { display: block; padding: 28px 22px 40px; font-size: 17px; line-height: 1.45; }
+  .phone-name { font-size: 40px; font-weight: 900; }
+  .phone-tag { font-size: 19px; color: var(--muted); margin-top: 2px; }
+  .phone-note { margin: 18px 0 14px; padding: 10px 14px; border: 2px solid var(--warn); border-radius: 12px; color: var(--warn); font-weight: 700; }
+  .phone-mode { color: var(--muted); }
+  .phone-facts { padding-left: 22px; margin: 12px 0; }
+  .phone-facts li { margin-bottom: 8px; }
+  .phone-done { color: var(--good); font-weight: 800; margin: 12px 0; }
+  .phone-links { padding-left: 20px; }
+  .phone-links li { margin-bottom: 8px; }
+}

@@ -3,7 +3,11 @@
 The demo runner (`apps/demo/run.ts`) serves the page and a Server-Sent Events
 stream at `http://localhost:4020/events`. Each SSE `data:` line is one JSON
 object with a `kind` field and `t` (ms since epoch, when the runner emitted it). The page (`apps/demo/web/`) renders only from this
-feed; it never talks to the chain itself. Amounts are decimal strings with 6
+feed. The one exception is a click on "Don't trust this page: verify on NEAR testnet", shown only when `mode.network` is
+`testnet`: the browser then reads the chain itself (`apps/demo/web/verify.js`, public testnet RPC, archival nodes as fallback).
+From the feed it takes only the panel ruling's call (scene 2, else the first `resolved` with `tier: "panel"`) and the `txHash`
+of its `call_paid`, `dispute_opened`, `dispute_answered` and `dispute_resolved` chain events; the contract account comes from the
+paying transaction, the senders from `call_paid.data.buyer`/`seller` and the contract's `get_config().resolver`. Amounts are decimal strings with 6
 decimals as shown on screen (e.g. `"49.580000"`). Times are ms since epoch.
 
 On connect, the runner first replays every message sent so far, so a page
