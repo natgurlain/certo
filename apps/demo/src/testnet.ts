@@ -42,7 +42,7 @@ interface RoleSpec {
 const P = ENV_PREFIX;
 export const ROLES: RoleSpec[] = [
   { role: 'owner', idVar: `${P}OWNER`, keyVar: `${P}OWNER_PRIVATE_KEY`, def: `${PRODUCT_ID}.testnet`, keyRequired: false, minNear: 0.1, what: 'contract owner; key only needed to change juror keys (set_jurors)' },
-  { role: 'contract', idVar: `${P}CONTRACT`, keyVar: `${P}CONTRACT_PRIVATE_KEY`, def: `v1.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 5, what: `${PRODUCT_ID} contract (code storage ~3.6 NEAR)` },
+  { role: 'contract', idVar: `${P}CONTRACT`, keyVar: `${P}CONTRACT_PRIVATE_KEY`, def: `v1.${PRODUCT_ID}.testnet`, keyRequired: false, minNear: 5, what: `${PRODUCT_ID} contract (code storage ~3.6 NEAR); key only needed to deploy` },
   { role: 'token', idVar: `${P}TOKEN`, keyVar: `${P}TOKEN_PRIVATE_KEY`, def: `usdc.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 2, what: 'mock USDC token (code storage ~1.4 NEAR)' },
   { role: 'resolver', idVar: 'RESOLVER_ACCOUNT', keyVar: 'RESOLVER_PRIVATE_KEY', def: `resolver.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 0.5, what: 'panel resolver (submits resolve)' },
   { role: 'honest-api', idVar: 'SELLER_HONEST_API_ACCOUNT', keyVar: 'SELLER_HONEST_API_PRIVATE_KEY', def: `honest-api.sellers.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 1.5, what: 'honest seller (1 NEAR registration deposit)' },
@@ -143,7 +143,7 @@ export function readTestnetConfig(env: NodeJS.ProcessEnv = process.env): Testnet
     const a: TestnetAccount = { accountId };
     if (!key) {
       if (r.keyRequired) problems.push(`${r.keyVar} is empty (key of ${accountId}, ${r.what})`);
-      else notes.push(`${r.keyVar} is empty: fine unless the juror keys on the contract must change`);
+      else notes.push(`${r.keyVar} is empty: ${r.role === 'contract' ? 'fine once the contract is deployed (its key can be deleted to lock the code)' : 'fine unless the juror keys on the contract must change'}`);
     } else {
       const k = checkSecretKey(key);
       if ('error' in k) problems.push(`${r.keyVar}: ${k.error}`);
@@ -329,6 +329,11 @@ export async function ensureDeployed(cfg: TestnetConfig, want: JurorWant, log: (
     const st = await viewAccount(cfg.rpcUrl, a.accountId);
     if (!st.exists) throw new Error(`${a.accountId} (${r.idVar}) does not exist on testnet; create it first (docs/TESTNET.md)`);
     try { await provider.viewAccessKey(a.accountId, a.publicKey!, { finality: 'final' }); } catch {
+      if (r.role === 'contract' && st.codeHash === codeHashOf(WASM.certo)) {
+        log(`${a.accountId}: ${r.keyVar} is no longer an access key (code locked); the contract is already deployed, so it is not needed`);
+        delete a.privateKey;
+        continue;
+      }
       throw new Error(`${r.keyVar} (public key ${a.publicKey}) is not an access key of ${a.accountId}`);
     }
   }
@@ -344,6 +349,7 @@ export async function ensureDeployed(cfg: TestnetConfig, want: JurorWant, log: (
     if (st.exists && st.codeHash !== NO_CODE_HASH) {
       throw new Error(`${A[role].accountId} already holds other code (${st.codeHash}); this script does not upgrade a deployed contract. Use a fresh account for ${role === 'contract' ? `${P}CONTRACT` : `${P}TOKEN`}.`);
     }
+    if (!A[role].privateKey) throw new Error(`${A[role].accountId} has no code yet; set ${role === 'contract' ? `${P}CONTRACT_PRIVATE_KEY` : `${P}TOKEN_PRIVATE_KEY`} to deploy it`);
     log(`${role} ${A[role].accountId}: deploying ${wasm} and calling new`);
     const out = await account(role).signAndSendTransaction({
       receiverId: A[role].accountId,

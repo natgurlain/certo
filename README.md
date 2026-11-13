@@ -90,7 +90,7 @@ A payment by an agent for an API call is final. If the response is an error, mis
 
 | Who | Can | Cannot |
 |---|---|---|
-| Contract owner | Replace the three juror keys (event `jurors_set`), change the resolver, withdraw fees. Through the juror keys it decides every panel dispute, so it can move refund and ruling fee out of a panel-opted seller's bond, or a buyer's stake to the treasury. The testnet contract account still holds a full-access key, so its code can be replaced | Move a bond or a stake directly (no method does); forge a vote under the registered keys |
+| Contract owner | Replace the three juror keys (event `jurors_set`), change the resolver, withdraw fees. Through the juror keys it decides every panel dispute, so it can move refund and ruling fee out of a panel-opted seller's bond, or a buyer's stake to the treasury. The contract account `v1.certo.testnet` has had no access keys since 2026-11-13 ([DeleteKey tx GUUyUcc4…](https://testnet.nearblocks.io/txns/GUUyUcc4zqTvDXTvmBoHJkqb5JDUcKg5ygBRCCCiGixh); check: `view_access_key_list` returns none), so nobody can replace its code | Move a bond or a stake directly (no method does); forge a vote under the registered keys |
 | Resolver (panel service) | Submit `resolve` alone for 60 s after the seller answers; then anyone can | Change a vote (G1), swap the evidence (G7) or the prompt (G8) |
 | Seller | Answer a dispute with an offer; cure a non-delivery claim by publishing the response | Deny a receipt it signed; withdraw bond below open exposure (G6) |
 | Buyer | Dispute once per window, inside it, with a stake | Invent a receipt (G5); dispute twice in one window (G3) or late (G4); collect the midpoint by withholding its sealed offer from the panel (G16) or by splitting the jurors (G17) |

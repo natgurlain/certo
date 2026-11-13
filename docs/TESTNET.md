@@ -208,3 +208,10 @@ A testnet run took 130 s for the four scenes (run 7, 2026-11-13); scene 4 alone 
 | `… was initialised with another owner/token/resolver` | use a fresh contract account |
 | `… is registered with another receipt key` | the seller's NEAR key changed since registration; use a fresh seller account |
 | HTTP 429 from the RPC | set `NEAR_RPC_URL` to another testnet provider (https://docs.near.org/api/rpc/providers) |
+
+## Locked
+
+On 2026-11-13, after the final run, the only access key of `v1.certo.testnet` was deleted
+(tx `GUUyUcc4zqTvDXTvmBoHJkqb5JDUcKg5ygBRCCCiGixh`), so its code can no longer be replaced. `make testnet-demo`
+still runs against it: the contract key is only needed for the first deploy, and the runner skips the key check once
+`res/certo.wasm` is deployed. The owner key (`certo.testnet`, for `set_jurors`) is kept.
