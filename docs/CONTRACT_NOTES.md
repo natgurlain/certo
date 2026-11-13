@@ -100,10 +100,10 @@ it imports `sha256` and `ed25519_verify` from `env` and none of the gas-key host
 functions. Checked on macOS arm64 only, 2026-11-11, nearcore 2.10.0:
 `cargo test --workspace` 63/63 (28 unit, 16 guard, 19 sandbox), `make guards` 10/10 in
 three consecutive runs (60 to 70 s), the G17 guard-revert (the `no_g17` build swapped in
-as `certo.wasm` fails G17; restored by hash), `npm test` 209/209 at that commit, 211 since (the MCP sandbox file
+as `certo.wasm` fails G17; restored by hash), `npm test` 209/209 at that commit, 219 since (the MCP sandbox file
 needed one rerun under load), `make verify` 375 real ballots and `make demo` `DEMO OK: 5/5`.
 Not re-run on nearcore 2.14.0 for this build. The Linux rows of the table were checked on the
-earlier builds below and not repeated.
+earlier builds below; the Linux check of 2026-11-13 above repeated them on this build.
 
 Verified on 2026-11-11 with the pre-rename build (`makegood.wasm` 354,412 bytes, SHA-256 `5a6a9031…`). The rename to Certo changed only brand strings; the rebuilt `certo.wasm` (354,388 bytes, SHA-256 `9e8118ad…`) was re-checked on macOS arm64 only (demo, `npm test`, `make guards`, `cargo test` on nearcore 2.10.0):
 
@@ -114,10 +114,10 @@ Verified on 2026-11-11 with the pre-rename build (`makegood.wasm` 354,412 bytes,
 | Docker `node:20-trixie` linux/arm64 (glibc 2.41), clean copy, `npm ci` | 2.10.0 (downloaded) | `make demo`, `make test`, `make guards` 8/8, `make verify` |
 | Docker `node:20` linux/arm64 (Debian 12, glibc 2.36) | 2.10.0 x86-64 binary under `qemu-x86_64` 7.2 with the `node:20` amd64 glibc 2.36 libraries (`NEAR_SANDBOX_BIN_PATH`) | `make demo`, `make test`, `make guards` 8/8, `make verify` |
 | Docker `node:20` linux/arm64 (glibc 2.36) | 2.10.0 aarch64 | refused with the glibc message; `make verify` passes |
-| Docker `node:20` linux/amd64 on Apple silicon (Rosetta) | 2.10.0 | the binary starts, then panics in `rustix` auxv parsing (`param/auxv.rs:302`) when it applies the first chunk. Most likely an emulator artefact (the same binary passes under qemu, row above); not run on real x86-64 hardware |
+| Docker `node:20` linux/amd64 on Apple silicon (Rosetta) | 2.10.0 | the binary starts, then panics in `rustix` auxv parsing (`param/auxv.rs:302`) when it applies the first chunk. Most likely an emulator artefact (the same binary passes under qemu, row above); the current build passes on native x86-64 (GitHub Actions, above) |
 
-Testnet runs a newer protocol than 2.14.0; that it accepts the wasm is not
-verified.
+Testnet runs a newer protocol than 2.14.0 and accepts the wasm: deployed as
+`v1.certo.testnet` and run on 2026-11-13 (README section 7).
 
 Toolchain: stable rustc 1.96.1; no toolchain pin is needed. The build script
 calls plain `cargo build` with the flags `cargo near build` uses: **`--cfg
@@ -125,8 +125,8 @@ near` is required** (near-sdk selects the on-chain host functions only under
 this cfg; without it `sha256`, `ed25519_verify` and panics compile to
 pure-Rust fallbacks, every `require!` message is lost as a wasm `unreachable`
 trap, and the wasm grows to ~635 KB) and `-C link-arg=-s`. The built
-`certo.wasm` imports `sha256` and `ed25519_verify` from `env`. It is about
-354 KB, so the contract account needs about 3.5 NEAR for code storage.
+`certo.wasm` imports `sha256` and `ed25519_verify` from `env`. It is
+356,230 bytes, so the contract account needs about 3.6 NEAR for code storage.
 
 ## Encodings at the contract boundary
 
@@ -249,8 +249,9 @@ Events: `jurors_set`, `resolver_set`, `treasury_withdrawn`, `seller_registered`,
    buyer can always force a verdict itself: `resolve` is open to **any** account
    once `resolver_exclusive_ms` (60 s) has passed after the answer, and it stays
    callable until someone calls `resolve_default`; so a buyer whose panel service is
-   down runs the three jurors with its own NEAR AI key (`npx certo resolve`) in the
-   240 s between 60 s and the 300 s deadline. A buyer who does nothing gets what the
+   down runs the three jurors with its own NEAR AI key and calls the contract's
+   `resolve` method directly (e.g. with near-cli; there is no CLI command for it
+   yet) in the 240 s between 60 s and the 300 s deadline. A buyer who does nothing gets what the
    seller offered and its stake back (with the reveal), no loss on its record: the
    same as accepting the offer. The seller cannot force a panel (it lacks the
    reveal) but gains nothing from the deadline beyond its own offer. Known residual:
@@ -290,7 +291,8 @@ Events: `jurors_set`, `resolver_set`, `treasury_withdrawn`, `seller_registered`,
     the midpoint of the two offers with a valid reveal, as before item 5 changed),
     G17 split-panel payout (the weakened build pays the midpoint of the two offers on
     a split instead of the seller's offer).
-15. **No real NEAR AI recording exists yet.** Ballot tests sign with generated
+15. **Real NEAR AI recordings.** `fixtures/panel/` holds 375 real recorded
+    ballots, checked by `make verify`. Ballot tests also sign with generated
     ed25519 keys in the exact `provider_tee` / `gateway` text format. The test
     `t07_recorded_nearai_signatures_verify_on_chain` reads every
     `fixtures/panel/*.json` (4.4 replay format; signature and key as hex, `0x`hex

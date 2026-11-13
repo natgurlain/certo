@@ -164,7 +164,7 @@ Every item maps to a shot in the 60-second video (V1–V6, section 5.5) or to a 
 
 | # | Item | Maps to | Hours |
 |---|---|---|---|
-| S1 | Testnet deployment and one live run with real panel calls; explorer links in README and UI | README section 8; credibility with human judges | 3 |
+| S1 | Testnet deployment and one live run with real panel calls; explorer links in README and UI | README section 7; credibility with human judges | 3 |
 | S2 | Sealed buyer offer (commit at dispute, reveal at resolve). Cut line: if not green at 12 Nov 18:00, offers are open and README says so | V3 caption | 2 |
 | S3 | On-chain rule checks for stale data and missing fields (`claim_rule`) | extra shot in V5 | 2 |
 | S4 | `make verify`: offline check of recorded ballots and attestation binding (no chain, no keys) | S-repro fallback | 2 |
@@ -404,9 +404,9 @@ The contract already holds seller, buyer, price, terms and request hash for the 
 
 #### Happy path (x402-v2-shaped headers, scheme `certo-bonded`)
 
-1. `GET /v1/holders?token=NEAR&top=5` → `402` with header `PAYMENT-REQUIRED: base64({"x402Version":2,"resource":{"url":…},"accepts":[{"scheme":"certo-bonded","network":"near:testnet","amount":"400000","asset":"<token account>","payTo":"<contract account>","maxTimeoutSeconds":60,"extra":{"seller":"chainfacts.sellers.certo.testnet","quoteId":"<32 hex>","termsId":"holders-v1","windowMs":120000,"feeBps":100}}]})`.
+1. `GET /v1/holders?token=NEAR&top=5` → `402` with header `PAYMENT-REQUIRED: base64({"x402Version":2,"resource":{"url":…},"accepts":[{"scheme":"certo-bonded","network":"near:testnet","amount":"400000","asset":"<token account>","payTo":"<contract account>","maxTimeoutSeconds":60,"extra":{"seller":"honest-api.sellers.certo.testnet","quoteId":"<32 hex>","termsId":"holders-v1","windowMs":120000,"feeBps":100}}]})`.
 2. Buyer SDK checks `get_seller` (bond, free capacity, fee, record) and `get_terms`, then sends `token.ft_transfer_call(receiver_id = contract, amount = "400000", msg = {"action":"pay", "seller", "quote_id", "terms_id", "request_hash"})` with 1 yoctoNEAR and 100 TGas. In the same transaction the seller receives 396_000 and the treasury 4_000.
-3. Buyer repeats the request with `PAYMENT-SIGNATURE: base64({"x402Version":2,"accepted":{…same entry…},"payload":{"callId":"…","buyer":"scout.testnet","txHash":"…"}})`.
+3. Buyer repeats the request with `PAYMENT-SIGNATURE: base64({"x402Version":2,"accepted":{…same entry…},"payload":{"callId":"…","buyer":"agent.certo.testnet","txHash":"…"}})`.
 4. Middleware calls view `get_call(call_id)` and requires: exists, `status = Open`, `price ≥ quoted amount`, `terms_id` matches, **`request_hash` equals the hash of this request**, and the call has not been served before (in-memory set; a second request with the same `call_id` gets the cached response and receipt). It runs the handler, then answers with the body and `PAYMENT-RESPONSE: base64({"success":true,"network":"near:testnet","transaction":"<txHash>","payer":"<buyer>","receipt":{"callId","responseHash","statusCode","servedAtMs","sig"}})`. If the handler throws or returns ≥ 500, the middleware **still signs a receipt** with that status over the error body.
 5. Buyer SDK recomputes `response_hash`, checks the signature against `receipt_pubkey` from `get_seller`, and returns `{body, receipt, callId}` to the agent.
 
@@ -423,7 +423,7 @@ Panel path after the seller's answer:
 
 1. The buyer SDK sees `dispute_answered`, then `POST /cases` to the panel service: `{call_id, buyer_offer_bps, salt, request_canon, response_body}`.
 2. The service reads the call, dispute and terms from the contract, checks the hashes and the commitment locally, gets the three bodies from the view `build_panel_request`, sends each to its juror **byte for byte** (non-streaming, `x-no-aliasing: true`, `Accept-Encoding: identity`), stores raw response bytes, fetches `/v1/signature/<id>?model=…&signing_algo=ed25519` with up to 5 retries 500 ms apart, and calls `resolve` from the resolver account.
-3. If the service is down, after 60 s the buyer or seller can do steps 2–3 themselves with their own NEAR AI key (`npx certo resolve <call_id>`; only the buyer holds the reveal); after 300 s `resolve_default` applies and pays the seller's offer, so a buyer who wants more than the offer must get a verdict before then.
+3. If the service is down, after 60 s the buyer or seller can do steps 2–3 themselves with their own NEAR AI key (by calling the contract's `resolve` method directly, e.g. with near-cli; there is no CLI command for it yet; only the buyer holds the reveal); after 300 s `resolve_default` applies and pays the seller's offer, so a buyer who wants more than the offer must get a verdict before then.
 
 Timeouts in one place: SDK delivery timeout 10 s · seller answer/cure 30 s · resolver exclusive 60 s · panel deadline 300 s · dispute window 120 s (per seller).
 
@@ -682,15 +682,15 @@ New outside competitors found today, missing from the baseline: **Pact Network**
 
 ### 5.5 The 60-second video (screen recording of `apps/demo`, human voice-over)
 
-Layout: three lanes — **Buyer agent `scout`** (balance), **Seller** (balance, bond bar, fee badge), **Panel** (three juror badges). A footer shows the last contract event and its transaction hash.
+Layout: three lanes — **Buyer agent `agent`** (balance), **Seller** (balance, bond bar, fee badge), **Panel** (three juror badges). A footer shows the last contract event and its transaction hash.
 
 | Shot | Time | Screen | On-screen numbers | Voice-over |
 |---|---|---|---|---|
 | V1 | 0–7 s | Black card, white text, then the three lanes fade in | "Your agent paid 0.40 for data. The data was wrong. Now what?" | "Agent payments are final. If the API you paid lies to you, the money is gone." |
-| V2 | 7–17 s | `scout` calls honest seller `chainfacts` | Buyer 10.00 → 9.60. Seller 0.000 → **0.396** in the same row as the payment. Bond 50.00, exposed 0.42, fee badge 1.0%. Caption: "paid in the same transaction" | "With Certo the seller is paid instantly, because it posted a bond. Honest sellers never wait." |
-| V3 | 17–40 s | `scout` asks `GET /v1/holders?token=NEAR&top=5` from seller `cheapfacts`; response is highlighted: `"token":"NEO"`. Agent clicks nothing: its log line reads "asked NEAR, got NEO → claim a refund". Seller's offer appears: 0%. Three juror badges light one after another, each with a green "signature verified by contract" tick | Offers: buyer 100% (sealed → revealed), seller 0%. Jurors: Qwen3.8 ✓ buyer, GLM-5.3 ✓ buyer, DeepSeek-V4.1 ✓ buyer. **3–0 in N s** (measured). Buyer 9.20 → **9.60**. Bond **50.00 → 49.58**. Fee badge **1.0% → 1.5%** | "This seller answers about the wrong token. The agent disputes. Three different models, each in its own enclave on NEAR AI Cloud, pick one of the two refund offers. The contract rebuilds the prompt and checks all three enclave signatures itself. Refund comes out of the seller's bond, and its fee goes up." |
-| V4 | 40–48 s | `scout-liar` disputes good data from `chainfacts` | Jurors 0–3. Liar's stake **−0.02**. Seller bond unchanged 50.00, fee stays 1.0% | "A buyer that lies loses three–nil and pays the ruling fee." |
-| V5 | 48–54 s | Presenter kills the `cheapfacts` process (terminal inset); `scout` pays, gets nothing, claims non-delivery; a 5 s countdown; refund | "seller silent 5 s → refund by rule, no panel". Buyer +0.40. Bond 49.58 → 49.16 | "Seller down? Refund by rule. No judge needed." |
+| V2 | 7–17 s | `agent` calls honest seller `honest-api` | Buyer 10.00 → 9.60. Seller 0.000 → **0.396** in the same row as the payment. Bond 50.00, exposed 0.42, fee badge 1.0%. Caption: "paid in the same transaction" | "With Certo the seller is paid instantly, because it posted a bond. Honest sellers never wait." |
+| V3 | 17–40 s | `agent` asks `GET /v1/holders?token=NEAR&top=5` from seller `shady-api`; response is highlighted: `"token":"NEO"`. Agent clicks nothing: its log line reads "asked NEAR, got NEO → claim a refund". Seller's offer appears: 0%. Three juror badges light one after another, each with a green "signature verified by contract" tick | Offers: buyer 100% (sealed → revealed), seller 0%. Jurors: Qwen3.8 ✓ buyer, GLM-5.3 ✓ buyer, DeepSeek-V4.1 ✓ buyer. **3–0 in N s** (measured). Buyer 9.20 → **9.60**. Bond **50.00 → 49.58**. Fee badge **1.0% → 1.5%** | "This seller answers about the wrong token. The agent disputes. Three different models, each in its own enclave on NEAR AI Cloud, pick one of the two refund offers. The contract rebuilds the prompt and checks all three enclave signatures itself. Refund comes out of the seller's bond, and its fee goes up." |
+| V4 | 40–48 s | `liar-agent` disputes good data from `honest-api` | Jurors 0–3. Liar's stake **−0.02**. Seller bond unchanged 50.00, fee stays 1.0% | "A buyer that lies loses three–nil and pays the ruling fee." |
+| V5 | 48–54 s | Presenter kills the `shady-api` process (terminal inset); `agent` pays, gets nothing, claims non-delivery; a 5 s countdown; refund | "seller silent 5 s → refund by rule, no panel". Buyer +0.40. Bond 49.58 → 49.16 | "Seller down? Refund by rule. No judge needed." |
 | V6 | 54–60 s | Terminal: `make guards` row G1 — one byte of a juror's answer changed from X to Y → red `E_BALLOT_SIG` | "Change one byte of a juror's answer → the chain refuses." Then end card: **Certo — agents pay instantly. Bad calls get refunded.** repo URL, "Built at NEAR HACKATHON" | "Change one byte of a vote and the chain says no. Certo. Built on NEAR." |
 
 Numbers check: bond after V3 = 50.00 − 0.40 − 0.02 = 49.58; after V5 = 49.58 − 0.40 − 0.02 = 49.16. Fee in V2 = 0.40 × 1.0% = 0.004. All of these are produced by `make demo`; the video is a recording of that run in live-panel mode if the key works on the day, otherwise replay mode with the on-screen label "panel answers recorded 12 Nov, signatures verified live".
@@ -831,7 +831,7 @@ Assumptions: one human, up to three coding agents in parallel, each on its own b
 | **10 Nov evening or 11 Nov 07:30** | H1 ★ Join NEAR Builders, claim the 10 USD NEAR AI key at nearbuilders.org/dashboard, put it in a local `.env` (never committed). Backup: an account at cloud.near.ai with 5 USD | 20 |
 | 11 Nov 07:30 | H2 Create the private GitHub repository and give the agents push access; decide the name (Q1) | 10 |
 | 11 Nov 12:30 | H3 ★ Review kill-test labels (before the run, ~11:00) and sign the go / no-go at 13:00 | 40 |
-| 12 Nov AM | H4 Create testnet accounts with the faucet: `certo.testnet`, then sub-accounts `v1`, `usdc`, `resolver`, `sellers`, `chainfacts.sellers`, `cheapfacts.sellers`, `scout`, `scout-liar`; export keys to `.env` | 30 |
+| 12 Nov AM | H4 Create testnet accounts with the faucet: `certo.testnet`, then sub-accounts `v1`, `usdc`, `resolver`, `sellers`, `honest-api.sellers`, `shady-api.sellers`, `agent`, `liar-agent`; export keys to `.env` | 30 |
 | 13 Nov AM | H5 Look at the X posts of "Bonded", "AgentBond", "Writ: Who Pays…" (5.4) | 30 |
 | 13 Nov PM | H6 Create or choose the mainnet payout account; collect submission fields (lead name, email, team size) | 15 |
 | 14 Nov 09:00–12:00 | H7 ★ Record the video (two takes), voice-over, export | 180 |
@@ -867,7 +867,7 @@ Assumptions: one human, up to three coding agents in parallel, each on its own b
 | ID | Task | Inputs | Output | Acceptance check | Depends | h |
 |---|---|---|---|---|---|---|
 | T08 ★ | Contract part 2: `claim_error`, dispute via `ft_on_transfer` (both kinds), `answer`, `cure`, `resolve` at the level from D2, `resolve_default`, settlement table, fee steps, `claimable`, all errors | 4.2, 4.5 | wasm | Sandbox tests for every row of the dispute table in 4.3 and the settlement table; G1, G3, G4, G5, G7, G10, G11, G14, G15 pass | T06, T07 | 5 |
-| T09 ★ | Seller middleware and demo seller (`chainfacts` good; `cheapfacts` modes: wrong-token, 503, dead; answer bot that offers 0%) | 4.3 | `packages/seller`, `apps/demo/seller.ts` | Against the sandbox: 402 → pay → 200 with a receipt that the contract's `receipt_text` + signature check accepts; a request with a different body than paid for is refused | T02, T06 | 3 |
+| T09 ★ | Seller middleware and demo seller (`honest-api` good; `shady-api` modes: wrong-token, 503, dead; answer bot that offers 0%) | 4.3 | `packages/seller`, `apps/demo/seller.ts` | Against the sandbox: 402 → pay → 200 with a receipt that the contract's `receipt_text` + signature check accepts; a request with a different body than paid for is refused | T02, T06 | 3 |
 | T10 ★ | Buyer SDK and CLI agent: `call()`, receipt check, `dispute()`, `claimError()`, `claimNonDelivery()`, simple policy "if `token` ≠ requested → dispute at 100%" | 4.3 | `packages/buyer` | Against T09 on the sandbox: clean call end to end; SDK refuses a response whose hash does not match the receipt | T02, T06 | 3 |
 
 **Thu 12 Nov PM — panel and end to end**
@@ -893,7 +893,7 @@ Assumptions: one human, up to three coding agents in parallel, each on its own b
 
 | ID | Task | Inputs | Output | Acceptance check | Depends | h |
 |---|---|---|---|---|---|---|
-| T18 | Testnet deployment and one live run of the four scenes; `docs/TESTNET.md` with accounts and transaction hashes; `set_jurors` from that day's attestation | H4, key | Deployed contract, hashes | Explorer shows `dispute_resolved` with `tier: "panel"`; README section 8 filled | T12, H4 | 3 |
+| T18 | Testnet deployment and one live run of the four scenes; `docs/TESTNET.md` with accounts and transaction hashes; `set_jurors` from that day's attestation | H4, key | Deployed contract, hashes | Explorer shows `dispute_resolved` with `tier: "panel"`; README section 7 filled | T12, H4 | 3 |
 | T19 | `claim_rule` (S3) and a fifth scene "stale data refunded by rule" | 4.2 | wasm, test | Stale response refunded; fresh response → `E_RULE_NOT_BROKEN` | T08 | 2 |
 | T20 | MCP server (S5) with three tools; a note in README on adding it to Claude Code | 4.1 | `packages/mcp` | `npx @modelcontextprotocol/inspector` lists the tools; `certo_call` works against the sandbox | T10 | 2 |
 

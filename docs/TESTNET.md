@@ -42,8 +42,8 @@ Funding needed per account (the dry run in step 4 checks these minimums):
 | Account | Env variable | Minimum | Why |
 |---|---|---|---|
 | `certo.testnet` | `CERTO_OWNER` | 0.1 NEAR left after funding the others | contract owner; parent of the others |
-| `v1.certo.testnet` | `CERTO_CONTRACT` | 5 NEAR | code storage of a 354 KB wasm (~3.5 NEAR) plus state |
-| `usdc.certo.testnet` | `CERTO_TOKEN` | 2 NEAR | code storage of a 167 KB wasm (~1.7 NEAR) plus balances |
+| `v1.certo.testnet` | `CERTO_CONTRACT` | 5 NEAR | code storage of a 356 KB wasm (~3.6 NEAR) plus state |
+| `usdc.certo.testnet` | `CERTO_TOKEN` | 2 NEAR | code storage of a 140 KB wasm (~1.4 NEAR) plus balances |
 | `resolver.certo.testnet` | `RESOLVER_ACCOUNT` | 0.5 NEAR | gas for `resolve` |
 | `sellers.certo.testnet` | (none) | 0.1 NEAR left | parent of the seller accounts only |
 | `honest-api.sellers.certo.testnet` | `SELLER_HONEST_API_ACCOUNT` | 1.5 NEAR | 1 NEAR registration deposit, gas |
@@ -51,7 +51,7 @@ Funding needed per account (the dry run in step 4 checks these minimums):
 | `agent.certo.testnet` | `BUYER_AGENT_ACCOUNT` | 0.5 NEAR | gas |
 | `liar-agent.certo.testnet` | `BUYER_LIAR_AGENT_ACCOUNT` | 0.5 NEAR | gas |
 
-Total about 13 NEAR. How much the faucet gives a new account is not verified here; check with
+Total about 13 NEAR. The faucet gave 10 NEAR per new account, so check with
 `near state certo.testnet` after the first command and top up from https://near-faucet.io
 (HACKATHON.md Q-008) if it is below 13.5 NEAR.
 
@@ -116,7 +116,7 @@ Expected when ready:
 DRY RUN OK: configuration complete, all accounts exist and are funded; `make testnet-demo` will deploy (if needed) and run the scenes
 ```
 
-Output today, with no `.env` and no accounts (run 2026-11-11):
+Output with no `.env` and no accounts (run 2026-11-11, before the accounts were created):
 
 ```text
 no .env file at the repository root; settings from the environment only (cp .env.example .env)
@@ -140,8 +140,8 @@ contract must match the panel answers the run submits. Three choices:
 | Panel answers | Needs | Command |
 |---|---|---|
 | **Live** NEAR AI calls during the run (the run DESIGN S1 asks for) | `NEARAI_API_KEY` in `.env`; current keys in `fixtures/jurors.json` (refresh: `npx tsx scripts/fetch-attestations.ts`) | `PANEL_MODE=live make testnet-demo` |
-| **Replay of real recordings** | `make record` run first, so `fixtures/panel/` holds real ballots | `make testnet-demo` |
-| **Synthetic** (today's `fixtures/panel/`) | nothing; deploys the published TEST keys, prints a warning banner; anyone can sign rulings on that contract | `TESTNET_JURORS=synthetic make testnet-demo` |
+| **Replay of real recordings** | real ballots in `fixtures/panel/` (committed; `make record` re-records them) | `make testnet-demo` |
+| **Synthetic** | synthetic ballots in `fixtures/panel/` (`npx tsx apps/demo/write-fixtures.ts --synthetic`); deploys the published TEST keys, prints a warning banner; anyone can sign rulings on that contract | `TESTNET_JURORS=synthetic make testnet-demo` |
 
 The order that gives the strongest README claim: key in `.env` → `make probe` → `make killtest`
 → `make record` → `PANEL_MODE=live make testnet-demo`. Juror keys can be changed later on the
@@ -192,7 +192,7 @@ tier (2.5% → 5.0%, then capped at 5.0%), and `liar-agent`'s stake doubles afte
 dispute (0.040000, 0.080000, …). Bonds and buyer balances are topped up, so the bond figures repeat.
 For README numbers, use the first run on fresh accounts.
 
-How long a run takes on testnet has not been measured; scene 4 alone waits the 30 s answer window.
+A testnet run took 130 s for the four scenes (run 7, 2026-11-13); scene 4 alone waits the 30 s answer window.
 
 ## Errors and what to do
 
@@ -208,17 +208,3 @@ How long a run takes on testnet has not been measured; scene 4 alone waits the 3
 | `… was initialised with another owner/token/resolver` | use a fresh contract account |
 | `… is registered with another receipt key` | the seller's NEAR key changed since registration; use a fresh seller account |
 | HTTP 429 from the RPC | set `NEAR_RPC_URL` to another testnet provider (https://docs.near.org/api/rpc/providers) |
-
-## Step 7: fill README section 8
-
-After a run that ends in `DEMO OK`, replace the `<!-- FILL: … -->` markers in README section 8:
-
-1. The account table: the names you used.
-2. Contract and token: `https://testnet.nearblocks.io/address/<account>` (open one link to check
-   the explorer URL pattern).
-3. The deploy transaction links from the setup output (first run).
-4. One link per scene from the scene lines and the transaction list: scene 1 the `pay` transaction,
-   scenes 2 and 3 the `resolve` transaction, scene 4 the `resolve_default` transaction.
-5. The panel mode of the run (live / replay / synthetic) and the date, and paste the four scene
-   lines and the final `DEMO OK` line verbatim.
-6. If the panel mode was synthetic, keep the sentence that says so.

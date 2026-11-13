@@ -12,8 +12,8 @@ Each guard of [DESIGN.md 4.8](DESIGN.md) is one check in the contract. `make gua
    the seller's offer) **and** the attack goes through on the weakened build (the "attack
    succeeded" column says what it achieved). Any other result prints `WRONG` and the command exits 1.
 4. It prints one line per guard as soon as its pair finishes. A pair that has not finished after
-   120 s is reported by name (`GUARDS FAILED: G3 (one dispute per call) did not finish within
-   120 s`) and the command exits 1. Each transaction is bounded too (60 s, `signAndSend` in
+   300 s (`GUARD_TIMEOUT_S` overrides it) is reported by name (`GUARDS FAILED: G3 (one dispute
+   per call) did not finish within 300 s`) and the command exits 1. Each transaction is bounded too (60 s, `signAndSend` in
    `packages/core/src/chain.ts`): when the sandbox answers `send_tx` with `TIMEOUT_ERROR`, the
    client looks the transaction up by hash and resends the same signed bytes, never a second
    signature, so a transaction cannot run twice. At most three pairs run at once; G4 and G16 move

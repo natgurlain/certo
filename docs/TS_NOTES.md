@@ -106,10 +106,12 @@ hex for 32-byte arguments and view fields, `Base64VecU8` for signatures,
 
 ## Not done / not verified
 
-- No test runs against a real sandbox or testnet; `NearCertoChain` signed
-  calls are untested (views are tested against a mock JSON-RPC server).
+- `NearCertoChain` signed calls are tested against a local sandbox
+  (`tests/e2e/sandbox.test.ts`, `packages/mcp/test/sandbox.test.ts`) and ran
+  on testnet on 2026-11-13 (README section 7); no automated test runs on testnet.
 - Self-service `certo resolve <call_id>` (buyer or seller running the panel
   with their own key after 60 s) is not in the CLI; use `PanelService`
   directly.
 - Live NEAR AI calls are tested only against a mock server; the real
-  signature encoding is unverified (see above).
+  signature encoding is checked on the 375 recorded ballots in
+  `fixtures/panel/` (`make verify`).

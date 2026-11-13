@@ -42,8 +42,8 @@ interface RoleSpec {
 const P = ENV_PREFIX;
 export const ROLES: RoleSpec[] = [
   { role: 'owner', idVar: `${P}OWNER`, keyVar: `${P}OWNER_PRIVATE_KEY`, def: `${PRODUCT_ID}.testnet`, keyRequired: false, minNear: 0.1, what: 'contract owner; key only needed to change juror keys (set_jurors)' },
-  { role: 'contract', idVar: `${P}CONTRACT`, keyVar: `${P}CONTRACT_PRIVATE_KEY`, def: `v1.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 5, what: `${PRODUCT_ID} contract (code storage ~3.5 NEAR)` },
-  { role: 'token', idVar: `${P}TOKEN`, keyVar: `${P}TOKEN_PRIVATE_KEY`, def: `usdc.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 2, what: 'mock USDC token (code storage ~1.7 NEAR)' },
+  { role: 'contract', idVar: `${P}CONTRACT`, keyVar: `${P}CONTRACT_PRIVATE_KEY`, def: `v1.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 5, what: `${PRODUCT_ID} contract (code storage ~3.6 NEAR)` },
+  { role: 'token', idVar: `${P}TOKEN`, keyVar: `${P}TOKEN_PRIVATE_KEY`, def: `usdc.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 2, what: 'mock USDC token (code storage ~1.4 NEAR)' },
   { role: 'resolver', idVar: 'RESOLVER_ACCOUNT', keyVar: 'RESOLVER_PRIVATE_KEY', def: `resolver.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 0.5, what: 'panel resolver (submits resolve)' },
   { role: 'honest-api', idVar: 'SELLER_HONEST_API_ACCOUNT', keyVar: 'SELLER_HONEST_API_PRIVATE_KEY', def: `honest-api.sellers.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 1.5, what: 'honest seller (1 NEAR registration deposit)' },
   { role: 'shady-api', idVar: 'SELLER_SHADY_API_ACCOUNT', keyVar: 'SELLER_SHADY_API_PRIVATE_KEY', def: `shady-api.sellers.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 1.5, what: 'wrong-token seller (1 NEAR registration deposit)' },
