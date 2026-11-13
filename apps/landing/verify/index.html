@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verify a Certo refund on NEAR testnet, from your browser</title>
+<meta name="description" content="Your browser asks NEAR testnet directly: the refund transaction, the contract's code, and the three signed AI votes of Certo's experimental panel, checked with WebCrypto.">
+<meta name="theme-color" content="#0a0e15">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/landing.css">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Certo">
+<meta property="og:url" content="https://certo-bice.vercel.app/verify">
+<meta property="og:title" content="Don't trust Certo's page: verify the refund on NEAR testnet">
+<meta property="og:description" content="Your browser reads the refund transaction and the contract from NEAR testnet and checks the three AI signatures itself.">
+<meta property="og:image" content="https://certo-bice.vercel.app/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://certo-bice.vercel.app/og.png">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="wordmark" href="/" aria-label="Certo, home"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><rect x="3" y="3" width="58" height="58" rx="13" fill="none" stroke="currentColor" stroke-width="5"/><path d="M19 33.5l9 9 17-20" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>Certo</a>
+    <span class="pill pill-top"><span class="dot" aria-hidden="true"></span>Live on NEAR testnet · test USDC</span>
+    <nav class="topnav" aria-label="Sections">
+      <a href="/#how">How it works</a>
+      <a href="/demo">Demo</a>
+      <a href="/verify" aria-current="page">Verify</a>
+      <a href="/#limits">Limits</a>
+    </nav>
+    <a class="btn btn-ghost btn-sm" href="https://github.com/natgurlain/certo">GitHub <span class="ext" aria-hidden="true">↗</span></a>
+  </div>
+</header>
+
+<main id="main" class="vpage">
+  <div class="wrap narrow" data-verify>
+    <p class="eyebrow">Verify · NEAR testnet</p>
+    <h1>Don't trust this page.</h1>
+    <p class="sub">Your browser is asking NEAR testnet directly. It reads the contract and the refund transaction of call 2 (the wrong answer), rebuilds what each AI model of the <span class="exp">experimental</span> panel was asked, and checks the three signatures itself. Only the transaction IDs and account names come from us; everything else is read from the chain.</p>
+
+    <div class="card vbox">
+      <ul class="vlines" data-verify-lines>
+        <li data-line="tx"><span class="vk" aria-hidden="true"></span><span>The refund transaction exists on NEAR testnet: <span data-refund>0.40</span> USDC back to the buyer</span></li>
+        <li data-line="code"><span class="vk" aria-hidden="true"></span><span>The contract on chain is the published build</span></li>
+        <li data-line="sigs"><span class="vk" aria-hidden="true"></span><span><span data-sigs>3</span> of 3 AI votes carry valid signatures from the keys stored in the contract</span></li>
+        <li data-line="evidence"><span class="vk" aria-hidden="true"></span><span>The votes are about this request and this answer, not another one</span></li>
+      </ul>
+      <p class="vmeta" data-verify-meta aria-live="polite">Starting…</p>
+      <p class="vlinks"><button class="btn btn-ghost btn-sm" type="button" data-verify-run>Check again</button> <a href="https://testnet.nearblocks.io/txns/__RULING_TX__" data-verify-tx>See the transaction on NearBlocks <span class="ext" aria-hidden="true">↗</span></a></p>
+    </div>
+
+    <p class="fine">Not checked here: that each key belongs to a genuine enclave. That check runs offline (<code>make verify</code>), and the Intel and NVIDIA certificate chains are not verified anywhere yet. The contract owner registers the juror keys. <a href="https://github.com/natgurlain/certo/blob/main/docs/VERIFY.md">What the check covers <span aria-hidden="true">→</span></a></p>
+
+    <section class="vreport" data-verify-report aria-live="polite"></section>
+
+    <p class="more"><a href="/">← Back to Certo</a> · <a href="/demo">Watch the replay</a></p>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-base">
+    <p>Built at NEAR HACKATHON, November 2026. Testnet software: do not use with real funds.</p>
+    <p><a href="https://github.com/natgurlain/certo">GitHub</a> · <a href="https://github.com/natgurlain/certo/blob/main/LICENSE">MIT licence</a></p>
+  </div>
+</footer>
+
+<script type="module">
+  import { mountVerify } from "/verify-view.js";
+  const root = document.querySelector("[data-verify]");
+  const again = root.querySelector("[data-verify-run]");
+  let busy = false;
+  async function run() {
+    if (busy) return;
+    busy = true; again.disabled = true;
+    await mountVerify(root);
+    busy = false; again.disabled = false;
+  }
+  again.addEventListener("click", run);
+  run();
+</script>
+</body>
+</html>
