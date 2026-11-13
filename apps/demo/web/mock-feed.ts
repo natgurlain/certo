@@ -182,7 +182,7 @@ async function script(): Promise<void> {
   await panelDispute(2, "agent", "shady-api", c2, "buyer");
   send({ kind: "log", actor: "agent", text: "refund 0.40 received, stake 0.02 returned" });
   await sleep(4000);
-  send({ kind: "scene", n: 2, title: "Wrong token: the panel decides", status: "ok", line: "Scene 2 OK: votes buyer/buyer/buyer, 3 signatures verified by contract, refund 0.400000, bond 50.000000 → 49.580000, fee 1.0% → 1.5%", caption: "3–0 for the buyer, 3 signatures checked by the contract: 0.40 back from shady-api' bond" });
+  send({ kind: "scene", n: 2, title: "Wrong token: the panel decides", status: "ok", line: "Scene 2 OK: votes buyer/buyer/buyer, 3 signatures verified by contract, refund 0.400000, bond 50.000000 → 49.580000, fee 1.0% → 1.5%", caption: "3–0 for the buyer, 3 signatures checked by the contract: 0.40 back from shady-api's bond" });
   if (STOP_AFTER <= 2) return;
   await sleep(2000);
 

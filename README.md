@@ -2,16 +2,17 @@
 
 [![ci](https://github.com/natgurlain/certo/actions/workflows/ci.yml/badge.svg)](https://github.com/natgurlain/certo/actions/workflows/ci.yml)
 
-**Agents pay instantly. Bad calls get refunded.** Guards try to stop a bad agent payment; Certo gets the money back when one goes through. Built at NEAR HACKATHON (November 2026).
+**Your AI agent paid for a bad API answer. Certo gets the money back.** Guards try to stop a bad agent payment; Certo refunds one that went through. Built at NEAR HACKATHON (November 2026).
+
+**Check it in 10 seconds:** [certo-near.vercel.app/verify](https://certo-near.vercel.app/verify) (your browser reads NEAR testnet and re-checks a real refund) · **replay, 2 min:** [/demo](https://certo-near.vercel.app/demo) · **video, 60 s:** [watch](https://certo-near.vercel.app/certo-demo.mp4) · **the refund on testnet:** [2gK7DmMK…](https://testnet.nearblocks.io/txns/2gK7DmMKTdM21Nhqzri8oDW5dH8kPWvvLCVEPQcecCE8) <!-- FILL: X post with the video -->
+
+![Certo: the agent's 0.40 comes back out of the seller's bond](apps/landing/og.png)
 
 - A seller of a paid API locks a bond in a NEAR contract and is **paid in the buyer's own transaction**. No escrow, no waiting.
-- For 120 s the buyer agent can get its money back **out of that bond**: by rule (HTTP 5xx, no delivery, broken schema, stale data). Rule refunds are on for every seller; for answers that are well-formed but wrong, which no rule can catch, a seller can opt in to an experimental panel of three AI models, as both demo sellers do (see [Measured](#6-measured)).
+- For 120 s the buyer agent can get its money back **out of that bond**. Errors, no delivery, broken schema or stale data: refunded by rule, on for every seller. Answers that are well-formed but wrong, which no rule can catch: an opt-in, experimental panel of three AI models, as both demo sellers use (see [Measured](#6-measured)).
 - **No account can forge a vote under the registered juror keys.** The contract rebuilds each juror's prompt, hashes it, and checks three NEAR AI Cloud enclave signatures with `env::ed25519_verify` before the bond pays out. (The contract owner can replace the juror keys; see [Trust and limits](#3-what-is-real-what-is-not).)
 
-![Scene 2: asked NEAR, got NEO; three signed votes, verified in the browser and by the contract; refund from the bond](apps/demo/web/screenshots/scene2-end.png)
-
-[github.com/natgurlain/certo](https://github.com/natgurlain/certo) · **site:** [certo-near.vercel.app](https://certo-near.vercel.app) · **watch the replay:** [/demo](https://certo-near.vercel.app/demo) (the NEAR testnet run; [local run with all five scenes](https://certo-near.vercel.app/demo?feed=local.json)) · **check it yourself:** [/verify](https://certo-near.vercel.app/verify) (your browser reads the contract and the ruling from the testnet RPC and re-checks the three signatures itself) <!-- FILL: X post with the video -->
-MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt) · **live on NEAR testnet:** [a refund decided by three verified NEAR AI signatures](https://testnet.nearblocks.io/txns/2gK7DmMKTdM21Nhqzri8oDW5dH8kPWvvLCVEPQcecCE8) ([all transactions](#7-testnet))
+MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt) · site: [certo-near.vercel.app](https://certo-near.vercel.app) · [local run with all five scenes](https://certo-near.vercel.app/demo?feed=local.json) · [all testnet transactions](#7-testnet)
 
 ## Try it
 
@@ -89,19 +90,20 @@ A payment by an agent for an API call is final. If the response is an error, mis
 
 | Who | Can | Cannot |
 |---|---|---|
-| Contract owner | Replace the three juror keys (event `jurors_set`), change the resolver, withdraw fees | Move a bond or a stake; forge a vote under the registered keys |
+| Contract owner | Replace the three juror keys (event `jurors_set`), change the resolver, withdraw fees. Through the juror keys it decides every panel dispute, so it can move refund and ruling fee out of a panel-opted seller's bond, or a buyer's stake to the treasury. The testnet contract account still holds a full-access key, so its code can be replaced | Move a bond or a stake directly (no method does); forge a vote under the registered keys |
 | Resolver (panel service) | Submit `resolve` alone for 60 s after the seller answers; then anyone can | Change a vote (G1), swap the evidence (G7) or the prompt (G8) |
 | Seller | Answer a dispute with an offer; cure a non-delivery claim by publishing the response | Deny a receipt it signed; withdraw bond below open exposure (G6) |
-| Buyer | Dispute once, inside the window, with a stake | Invent a receipt (G5); dispute twice (G3) or late (G4); collect the midpoint by withholding its sealed offer from the panel (G16) or by splitting the jurors (G17) |
+| Buyer | Dispute once per window, inside it, with a stake | Invent a receipt (G5); dispute twice in one window (G3) or late (G4); collect the midpoint by withholding its sealed offer from the panel (G16) or by splitting the jurors (G17) |
 
-- **Panel timeout.** If no panel ruling arrives within 300 s of the seller's answer, a valid reveal above the seller's offer gets the seller's offer and the stake back. The buyer can always force a ruling itself: between 60 s and 300 s anyone may submit `resolve`, and only the buyer holds the reveal. Known gap: after the deadline anyone (in practice the seller) can settle without the reveal, which sends the buyer's stake to the treasury.
+- **Panel timeout.** If no panel ruling arrives within 300 s of the seller's answer, a valid reveal above the seller's offer gets the seller's offer and the stake back. The buyer can always force a ruling itself: between 60 s and 300 s anyone may submit `resolve`, and only the buyer holds the reveal (by calling the contract's `resolve` method directly; there is no CLI command for it yet). Known gap: after the deadline anyone (in practice the seller) can settle without the reveal, which sends the buyer's stake to the treasury.
 - **No majority.** If the three jurors reach no majority, the buyer gets only the seller's offer and its stake back, and the split is counted on both parties' public records (`seller_record.split_disputes` in `certo_quote`); a seller who plants text that confuses the jurors keeps that payment but not a clean record. Known limit of the experimental panel, chosen over a midpoint that a buyer could farm by provoking splits in its own request. A split is final: the buyer cannot re-ask for a majority (G17).
 - **Juror key rotation.** The owner can replace the juror keys. Every change emits `jurors_set` with the new epoch and keys, and every ruling's `ballots_verified` event names the epoch it was checked under, so a swap is visible on chain and any ruling can be compared with the attested keys in `fixtures/attestations/`. There is no timelock; a production deployment needs one, or no owner key at all.
 - **Re-asking and the free look.** A signature proves that an enclave serving that model gave this answer to this prompt, not that it was asked once. Whoever submits `resolve` (the resolver in the first 60 s, then the buyer, who holds the reveal) can ask each juror more than once and choose which answers to submit, or not submit at all and take the timeout rule, which returns the stake. So the stake deters only buyers who go through the panel service. Not solved; one reason the panel is experimental.
 - **Sealed offer.** The buyer reveals its offer to the panel service before `resolve`; the service is trusted not to pass it to the seller in that interval.
 - **Evidence is public.** Terms, request, response and the raw juror answers are transaction arguments. Not for private data.
 - **Size caps.** Terms and request 1,024 bytes; response 6,144 bytes for the panel and 16 KB for a cure. The seller middleware will not sign a larger response under Certo ([packages/seller/README.md](packages/seller/README.md)).
-- **False non-delivery claims** cost the buyer only gas; the seller pays one transaction to cure each. Seller state (served responses) is in memory; a restart inside a window loses the ability to cure.
+- **What the rules check.** The rules compare data the seller signed: the 5xx rule uses the seller's own signed error, and the stale rule compares the seller's own `as_of` with its own receipt time, not with block time. They catch a seller that labels its data honestly; a seller that lies about `as_of` needs the panel.
+- **False non-delivery claims** cost the buyer only gas; the seller pays one transaction to cure each. A cure reopens the call with a fresh window, so the buyer can claim again on the same call (known gap). Seller state (served responses) is in memory; a restart inside a window loses the ability to cure.
 - **Exposure.** A seller's open refund risk never exceeds its bond (G2); a clean record lowers the fee, never raises the limit.
 - **No appeal. Counters do not decay. Adoption** is untested: sellers bond only if buyers prefer bonded sellers.
 
@@ -124,7 +126,7 @@ Every row has a test and a command. `cargo test` needs Rust; everything else nee
 | Offline check of recorded ballots and attestation binding | `scripts/verify-recorded.ts` | `make verify` |
 | TypeScript and Rust encoders agree byte for byte | `fixtures/vectors.json` | `npm test -w @certo/tests` |
 
-All tests: `make test` (211 TypeScript tests, including end-to-end on the sandbox) and `cargo test --workspace` (63 Rust tests).
+All tests: `make test` (219 TypeScript tests, including end-to-end on the sandbox) and `cargo test --workspace` (63 Rust tests).
 
 ## 5. Guards
 
@@ -180,7 +182,13 @@ Run on NEAR testnet on 2026-11-13 with the final contract (`res/certo.wasm`, SHA
 | Scene 3: `resolve`, panel for the seller, lying buyer's stake forfeited | [8LBY5hjP…](https://testnet.nearblocks.io/txns/8LBY5hjPV8nphMXkn2fbJoRN5K1jFmnSGNZK39uRVTHS) |
 | Scene 4: `resolve_default`, seller did not answer, refund by rule | [6XJsXCQg…](https://testnet.nearblocks.io/txns/6XJsXCQgaRKamn66DtSFwije29dvwdBNiWFix92226vo) |
 
-![The hosted replay re-checking the scene 2 ruling against NEAR testnet from the browser](apps/demo/web/screenshots/verify-testnet.png)
+No browser needed: the same ruling straight from the testnet RPC (NearBlocks blocks scripted clients). It prints `ballots_verified`, `dispute_resolved` and the `ft_transfer` of 420000 (0.40 refund + 0.02 stake) to `agent.certo.testnet`:
+
+```sh
+curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tx","params":{"tx_hash":"2gK7DmMKTdM21Nhqzri8oDW5dH8kPWvvLCVEPQcecCE8","sender_account_id":"resolver.certo.testnet","wait_until":"FINAL"}}' | jq -r '.result.receipts_outcome[].outcome.logs[]'
+```
+
+![The /verify page re-checking the scene 2 ruling against NEAR testnet from the browser](apps/demo/web/screenshots/verify-testnet.png)
 
 ## 8. Prior art
 

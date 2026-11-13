@@ -486,7 +486,7 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
         feed.emit({ kind: 'resolved', scene: 2, callId: r.callId, tier: 'panel', winner: 'buyer', refund: formatUsdc(res.refund), votes: '3-0', elapsedMs: Date.now() - t });
         return {
           line: `Scene 2 asked NEAR, got NEO: content dispute, votes ${res.votes.join('/')}, 3 signatures verified by contract${synthetic ? ' (synthetic test keys)' : ''}, refund ${formatUsdc(res.refund)}, bond ${formatUsdc(s0.bond)} → ${formatUsdc(s1.bond)}, fee ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)}`,
-          caption: `3–0 for the buyer, 3 signatures checked by the contract: ${cap(res.refund)} back from shady-api' bond`,
+          caption: `3–0 for the buyer, 3 signatures checked by the contract: ${cap(res.refund)} back from shady-api's bond`,
         };
       },
     },

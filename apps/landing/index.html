@@ -265,7 +265,7 @@
         <p><b>How good is the panel?</b> In our own tests it ruled correctly on 19 of 20 labelled cases, and failed 1 of 10 prompt-injection attempts. That is why it is opt-in and marked <span class="exp">experimental</span>. <a href="https://github.com/natgurlain/certo/blob/main/docs/KILLTEST.md">Read the test <span aria-hidden="true">→</span></a></p>
       </aside>
     </div>
-    <p class="aside-row"><b>What stops a buyer from lying?</b> Claiming that an answer is wrong costs the buyer a small deposit (0.02 USDC on a 0.40 call). If the <span class="exp">experimental</span> panel disagrees, the deposit is gone, and the next one doubles.</p>
+    <p class="aside-row"><b>What stops a buyer from lying?</b> Claiming that an answer is wrong costs the buyer a small deposit (0.02 USDC on a 0.40 call). If the <span class="exp">experimental</span> panel disagrees, the deposit is gone, and the next one doubles. Known gap: a buyer who never asks the panel and lets the dispute time out gets only the seller's offer, but also the deposit back, so today the deposit deters only buyers who go through the panel. <a href="https://github.com/natgurlain/certo#3-what-is-real-what-is-not">Details</a>.</p>
   </div>
 </section>
 
@@ -299,7 +299,7 @@
   <div class="wrap verify-grid">
     <div class="verify-copy">
     <h2 id="verify-h">Don't trust this page.</h2>
-    <p class="sub">Press the button and your browser asks NEAR testnet directly. It reads the contract and the refund transaction, rebuilds what each AI model of the <span class="exp">experimental</span> panel was asked, and checks the three signatures itself. Only the transaction IDs and account names come from us; everything else is read from the chain.</p>
+    <p class="sub">Press the button and your browser asks NEAR testnet directly. It reads the contract and the refund transaction, rebuilds what each AI model of the <span class="exp">experimental</span> panel was asked, and checks the three signatures itself. From us come only the transaction IDs, the account names, the published contract hash and the panel's system prompt; the page checks that prompt against the hash the contract itself logged. Everything else is read from the chain.</p>
     <p class="fine">Not checked here: that each key belongs to a genuine enclave. That check runs offline (<code>make verify</code>), and the Intel and NVIDIA certificate chains are not verified anywhere yet. <a href="https://github.com/natgurlain/certo/blob/main/docs/VERIFY.md">What the check covers <span aria-hidden="true">→</span></a></p>
     </div>
     <div class="card vbox" data-verify>
@@ -364,7 +364,7 @@ claude mcp add certo -- npx certo-mcp --playground</code></pre>
           <li>Three enclave signatures of the <span class="exp">experimental</span> AI panel checked inside the contract</li>
           <li>MCP server, CLI, buyer SDK, seller middleware</li>
           <li>Ten attacks on our own contract, each refused (<code>make guards</code>)</li>
-          <li>211 TypeScript tests, 63 Rust tests, MIT licence</li>
+          <li>219 TypeScript tests, 63 Rust tests, MIT licence</li>
         </ul>
       </div>
       <div class="limits-col">

@@ -220,6 +220,12 @@ function noVerdict(err: unknown): boolean {
   return [408, 500, 502, 503, 504].includes(e?.cause as number) || /timeout|fetch|ECONN|socket/i.test(String(e?.message ?? err));
 }
 
+/** Rejections proving the transaction was never admitted, so signing it again cannot execute it twice. */
+function neverAdmitted(err: unknown): boolean {
+  const e = err as { type?: string; message?: string };
+  return e?.type === 'InvalidChain' || e?.type === 'Expired' || /Transaction has expired/.test(String(e?.message ?? ''));
+}
+
 /**
  * Sign `params` once and send it with a bounded total time (`timeoutMs`, default
  * `TX_TIMEOUT_MS`). Each RPC request is made once (no near-js back-off). When the node gives no
@@ -228,8 +234,9 @@ function noVerdict(err: unknown): boolean {
  * bytes** are sent again: one nonce, one hash, so it can never execute twice. Past the deadline it
  * throws `TxTimeoutError` with the hash. Only a rejection that proves the transaction was never
  * admitted, `InvalidChain` ("parent block hash doesn't belong to the current chain", seen on the
- * 2.10.0 sandbox with many concurrent transactions), leads to signing again (fresh block hash and
- * nonce), at most `tries` times. With `throwOnFailure` (default) a failed execution throws.
+ * 2.10.0 sandbox with many concurrent transactions) or `Expired` (its block hash fell out of the
+ * validity window, seen right after `sandbox_fast_forward`), leads to signing again (fresh block
+ * hash and nonce), at most `tries` times. With `throwOnFailure` (default) a failed execution throws.
  * The transaction references the latest **final** block (near-js uses the optimistic head, which
  * the 2.10.0 sandbox sometimes never makes canonical: `InvalidChain`, or a transaction it accepts
  * and never executes).
@@ -249,7 +256,7 @@ export async function signAndSend(account: Account, params: SendParams, o: { tri
     try {
       outcome = await within(sendUntilExecuted(rpc, account.accountId, hash, signed, deadline, waitLevelFor(rpc)), deadline, hash, timeoutMs);
     } catch (err) {
-      if (i < tries && (err as { type?: string }).type === 'InvalidChain') {
+      if (i < tries && neverAdmitted(err)) {
         await sleep(300 * i);
         continue;
       }

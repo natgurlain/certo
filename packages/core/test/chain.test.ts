@@ -137,6 +137,11 @@ describe('signAndSend (scripted RPC)', () => {
     expect(calls('send_tx').length).toBe(2);
   });
 
+  it('signs again after Expired (block hash too old after a fast-forward)', async () => {
+    expect(await run({ send_tx: [invalid('Expired')] })).toEqual(OUTCOME);
+    expect([calls('send_tx').length, signings()]).toEqual([2, 2]);
+  });
+
   it('throws on a failed execution unless throwOnFailure is false', async () => {
     const failed = { ...OUTCOME, status: { Failure: { ActionError: { kind: 'x' } } } };
     await expect(run({ send_tx: [{ result: failed }] })).rejects.toMatchObject({ type: 'TxFailure' });
