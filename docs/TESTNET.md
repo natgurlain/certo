@@ -6,10 +6,13 @@ sandbox. Before the scenes it deploys and sets up the market if needed (the same
 procedure for the human who owns the accounts. Nothing in the repository creates accounts or
 holds keys; keys live only in `.env` (git-ignored).
 
-Status on 2026-11-11: the code path is written and was exercised end to end twice against a
-local sandbox whose accounts carry the testnet names (`v1.certo.testnet`, …) and throwaway
-local keys: deployment, juror-key switch with `set_jurors`, a second idempotent run, and the
-refusals listed under "Errors". It has **not** been run on testnet. No testnet account exists yet.
+Status on 2026-11-13: deployed and run. `make testnet-demo` ended `DEMO OK: 4/4 scenes, 3/3 juror
+signatures verified on chain` with the final contract; the transactions are listed in the README
+(section "Testnet"). Two fixes came out of the first runs: transactions now wait for finality on
+public networks (testnet RPC endpoints are load-balanced, so a read right after an optimistic
+execution can miss it), and reads retry a rate-limit refusal or a dropped connection. The sellers'
+answer bots poll every 4 s on testnet (fastnear's free tier rate-limits faster polling). The faucet
+gave 10 NEAR per new account; a second faucet account topped `certo.testnet` up.
 
 ## What runs where
 

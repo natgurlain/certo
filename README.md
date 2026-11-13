@@ -9,7 +9,7 @@
 ![Scene 2: asked NEAR, got NEO; three signed votes, verified in the browser and by the contract; refund from the bond](apps/demo/web/screenshots/scene2-end.png)
 
 [github.com/natgurlain/certo](https://github.com/natgurlain/certo) <!-- FILL: X post with the 60 s video · hosted replay URL (or delete) -->
-MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt)
+MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt) · **live on NEAR testnet:** [a refund decided by three verified NEAR AI signatures](https://testnet.nearblocks.io/txns/GvLdsJhSThMtC8M86ZkQ4wNxGsFaNV9Ny3234MsuLzBn) ([all transactions](#7-testnet))
 
 ## Try it
 
@@ -76,7 +76,7 @@ A payment by an agent for an API call is final. If the response is an error, mis
 
 | Area | Real | Not real, or absent |
 |---|---|---|
-| Money | Contract on a local NEAR sandbox (nearcore 2.10.0; also tested on 2.14.0) | Mock USDC with open `mint`. No mainnet, no value. Not yet run on testnet |
+| Money | Contract on a local NEAR sandbox (nearcore 2.10.0; also tested on 2.14.0) and on NEAR testnet ([Testnet](#7-testnet)) | Mock USDC with open `mint`. No mainnet, no value |
 | Jurors | Answers and enclave signatures recorded from NEAR AI Cloud; verified by the contract in every run. Kill test: [Measured](#6-measured) | Replayed unless `PANEL_MODE=live`. A recorded answer shows what the model said once |
 | Attestation | Reports fetched from `cloud-api.near.ai` and committed; `make verify` checks that each juror key and our nonce are inside the TDX quote | Intel and NVIDIA certificate chains and quote signatures are **not** verified, by the contract or by the script ([docs/VERIFY.md](docs/VERIFY.md)). The contract owner registers the juror keys |
 | Buyers, sellers | Express middleware, buyer SDK, CLI, MCP server, one-command seller setup | Both sellers are ours and serve fixture data. No third party has used it |
@@ -166,9 +166,15 @@ Under the rule set before the runs, a failed injection check alone means refunds
 
 ## 7. Testnet
 
-Not run yet. `make testnet-demo` deploys the market if needed and runs the same scenes on testnet with a 30 s answer window and explorer links in the transcript. Procedure: [docs/TESTNET.md](docs/TESTNET.md); check the configuration without sending anything: `npx tsx scripts/deploy-testnet.ts --dry-run`.
+Run on NEAR testnet on 2026-11-13 with the final contract (`res/certo.wasm`, SHA-256 `aca96429…`) and the real recorded NEAR AI ballots: `DEMO OK: 4/4 scenes, 3/3 juror signatures verified on chain` in 116 s. The seller's answer window is 30 s on testnet. Fee tiers in this run start higher because the testnet sellers keep their record from earlier runs. Procedure: [docs/TESTNET.md](docs/TESTNET.md).
 
-<!-- FILL after the first `make testnet-demo` that ends in DEMO OK: date and panel mode; explorer links for the contract, the scene 1 pay transaction, the scene 2 and 3 `resolve` transactions (event `ballots_verified`) and the scene 4 `resolve_default`; then replace "Not run yet" above. -->
+| What | Transaction |
+|---|---|
+| Contract `v1.certo.testnet` (deploy, juror keys from `fixtures/jurors.json`) | [account](https://testnet.nearblocks.io/address/v1.certo.testnet) · [deploy](https://testnet.nearblocks.io/txns/HJCycfj6bS43NjhHXv6pgpALunyHDwvfCicxREEfUz1n) |
+| Scene 1: pay, seller paid in the same transaction | [A77FrZrM…](https://testnet.nearblocks.io/txns/A77FrZrMSisUiXfs95aiSbcCvezxC7gL7ryYaEJ8mYd3) |
+| Scene 2: `resolve`, three NEAR AI signatures verified, refund 0.40 to the buyer (`ballots_verified`, `dispute_resolved` tier `panel`) | [GvLdsJhS…](https://testnet.nearblocks.io/txns/GvLdsJhSThMtC8M86ZkQ4wNxGsFaNV9Ny3234MsuLzBn) |
+| Scene 3: `resolve`, panel for the seller, lying buyer's stake forfeited | [EMgb4xaK…](https://testnet.nearblocks.io/txns/EMgb4xaKY6pmbPAW7A5McJvN486NjgnsJk5d8Wum6Xxe) |
+| Scene 4: `resolve_default`, seller did not answer, refund by rule | [38EC8Zxw…](https://testnet.nearblocks.io/txns/38EC8ZxwEeuFU12bFrmjn4oUtA9rnWixVXZ2dYcXLq6K) |
 
 ## 8. Prior art
 
@@ -187,7 +193,22 @@ x402r and KAMIYO x402Resolve hold the buyer's payment in escrow and rely on an a
 
 SecondEyes and Beeline (this hackathon) also verify a NEAR AI Cloud `provider_tee` signature inside a contract over a request the contract rebuilds, as Certo does; they use it to approve or block a payment before it is made. Certo uses the same check after the payment, to decide a refund out of a seller's bond, and adds the rule tier, a three-model panel and the seller's bond and record `[NV: READMEs read, not code]`. Entries named Writ, TabWrit, PayGuard, AgentPay Guard, PayShield-NEAR, Bonded, AgentBond and Taskbond had no README to read and were not compared. <!-- FILL: one sentence each after reading their X posts, or keep the sentence above --> Method and sources: [docs/DESIGN.md](docs/DESIGN.md) 5.3–5.4. Not built: an adapter to x402's `exact` scheme, refunds in another asset through NEAR Intents, a panel caller inside an enclave.
 
-## 9. Hackathon disclosure
+## 9. Where this goes
+
+Certo is the recourse layer; the aim is to make agent payments refundable on any rail, not to replace the rails.
+
+| Layer | Today (in this repo) | Next | Plugs into |
+|---|---|---|---|
+| Mandate: what the agent may spend | Per-call price cap (`packages/buyer/src/client.ts`) | Daily budget, minimum bond, maximum seller losses | Agent vaults and guards (SecondEyes, Beeline) |
+| Discovery and quote | `certo_quote`: price, bond, free capacity, fee, losses, splits, terms | A "Certo-backed" field directories can show | Agent Market, MCP registries |
+| Pay rail | Per call, one NEP-141 token, paid through the contract | Bonded cover: pay on stock x402, reserve against the seller's bond | x402 facilitators, NEAR Intents |
+| Receipt | Seller-signed over request, response, status, price (`contracts/certo/src/encode.rs`) | Cumulative receipts for metered use | x402 refund-receipt draft |
+| Recourse | Rule refunds; opt-in experimental panel; ten guards | A panel that passes its injection test; other resolvers per terms | — |
+| Record | Fee tier follows losses; splits; buyer stake multiplier (`contracts/certo/src/fees.rs`) | Decay; bonds posted by third parties | Credit scoring |
+| Statement | Local call store and NEP-297 events | Spent, refunded, net per seller | — |
+| Resale | Not built | Refunds that pass up a chain of sellers | — |
+
+## 10. Hackathon disclosure
 
 - Window 2026-10-19 to 2026-11-14. Design written 2026-11-10 ([docs/DESIGN.md](docs/DESIGN.md)); first commit 2026-11-11 (`70720fa`). <!-- FILL: confirm "No code from before the window", or name it and link the diff -->
 - AI coding agents: Claude Code (Anthropic) wrote code and documents in this repository. <!-- FILL: other agents; what the humans did -->
@@ -195,7 +216,7 @@ SecondEyes and Beeline (this hackathon) also verify a NEAR AI Cloud `provider_te
 - Libraries: `near-sdk` and `near-contract-standards` 5.28.3, `serde_json`, `near-workspaces`; `@near-js/*` 2.5, `near-sandbox` 0.3.5, `express` 5, `@modelcontextprotocol/sdk`, `zod`, `vitest`, `tsx`. Versions and pins: [docs/CONTRACT_NOTES.md](docs/CONTRACT_NOTES.md). No templates.
 - External services: NEAR AI Cloud (attestation reports, chat completions with signatures); NEAR testnet RPC.
 
-## 10. Layout and commands
+## 11. Layout and commands
 
 ```text
 contracts/certo/   Rust contract          packages/seller/  Express middleware, answer bot
