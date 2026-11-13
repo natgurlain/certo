@@ -81,6 +81,8 @@ export class LocalChain {
     if (!process.env.NEAR_SANDBOX_BIN_PATH && !existsSync(join(dirname(createRequire(import.meta.url).resolve('near-sandbox')), '..', '..', 'bin', `near-sandbox-${SANDBOX_VERSION}`, 'near-sandbox'))) {
       console.error(`downloading the nearcore ${SANDBOX_VERSION} sandbox binary, about 30 MB (first run only; set NEAR_SANDBOX_BIN_PATH to use an existing one)`);
     }
+    // near-sandbox waits NEAR_RPC_TIMEOUT_SECS (default 10) for the node to answer; a slow or busy machine needs longer
+    process.env.NEAR_RPC_TIMEOUT_SECS ??= '60';
     const sandbox = await Sandbox.start({ config: { additionalAccounts: extra }, version: SANDBOX_VERSION });
     // the sandbox is a child process; make sure it does not outlive this process
     const child = (sandbox as unknown as { childProcess?: { kill(sig: string): void } }).childProcess;

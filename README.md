@@ -13,7 +13,7 @@ MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt) · **live on NEAR t
 
 ## Try it
 
-Node 20 or 22 on macOS arm64 or Linux x86-64 (npm may print an `EBADENGINE` warning because `near-sandbox` declares Node 22.22.2; it runs on 20 and 22.16). No keys, no accounts, no Rust. The first run downloads a 26–33 MB NEAR sandbox binary ([platform notes](docs/CONTRACT_NOTES.md)).
+Node 20 or 22 on macOS arm64 or Linux x86-64 (npm may print an `EBADENGINE` warning because `near-sandbox` declares Node 22.22.2; it runs on 20 and 22.16). Linux x86-64 was checked with NEAR's x86-64 sandbox binary under qemu on glibc 2.36 (all steps pass), not on native x86-64 hardware ([platform notes](docs/CONTRACT_NOTES.md)). No keys, no accounts, no Rust. The first run downloads a 26–33 MB NEAR sandbox binary ([platform notes](docs/CONTRACT_NOTES.md)).
 
 ```sh
 npm ci
@@ -146,7 +146,7 @@ Apple M2, macOS, nearcore 2.10.0 sandbox, 2026-11-11. Wall-clock times vary betw
 
 | Measure | Value | Reproduce |
 |---|---|---|
-| `make demo` / `make test` / `make guards` | 29–35 s / 46–59 s / 60–90 s | the commands |
+| `make demo` / `make test` / `make guards` | 29–41 s / 46–59 s / 60–90 s (up to about 5 min on a loaded or emulated machine; `GUARD_TIMEOUT_S` raises the per-guard limit of 300 s) | the commands |
 | `cargo test --workspace` | 63 tests, about 5 min | `cargo test --workspace` |
 | Panel, live: three answers with full reasoning and three enclave signatures | median 23 s, 95th percentile 120 s (kill test, reserve set); a single probe took 5.9 s | `make killtest`, `make probe` (need a key) |
 | Gas, `resolve` with three short test ballots | 10.64 TGas | `cargo test -p certo --test sandbox t08_panel_buyer_wins -- --nocapture` |

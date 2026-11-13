@@ -86,6 +86,14 @@ never executed (`tx` answered 408 for 60 s; most likely signed against a head
 that never became canonical, the same cause as `InvalidChain`). The demo prints
 the sandbox version it runs.
 
+**Linux check, 2026-11-13** (commit 28933b8, Docker on Apple Silicon, host heavily loaded): arm64
+`node:20` (bookworm, glibc 2.36) running the **x86-64** nearcore 2.10.0 binary through
+`qemu-x86_64-static`: `make demo` 5/5, `make guards` 10/10 (G4 and G16 need more than 120 s
+under emulation, hence the 300 s per-guard limit and `GUARD_TIMEOUT_S`), `make verify`, `make test`
+209/209. Native arm64 `node:20-trixie` (glibc 2.41): the same, all pass. Under Docker Desktop's
+default **Rosetta** amd64 emulation the x86-64 sandbox panics at `rustix auxv.rs:302` (the
+emulator's auxiliary vector), an emulator artefact. No run on native x86-64 hardware.
+
 **Current build** (split rule G17, panel-timeout rule G16 and the panel request's `max_tokens`
 4096): `certo.wasm` 356,230 bytes, SHA-256 `aca96429481139397fe5e265659a9fe9a85093dddf827766d58c189ec7299b71`;
 it imports `sha256` and `ed25519_verify` from `env` and none of the gas-key host

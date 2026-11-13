@@ -260,7 +260,9 @@ async function runPair(chain: LocalChain, g: Guard): Promise<Row> {
 }
 
 /** A pair that has not finished by then counts as hung (normally 5 to 40 s each). */
-const GUARD_TIMEOUT_MS = 120_000;
+// G4 and G16 wait out the chain clock, so their time follows CPU speed: about 20 s on a laptop,
+// over 200 s on a loaded or emulated machine. GUARD_TIMEOUT_S overrides the limit.
+const GUARD_TIMEOUT_MS = Number(process.env.GUARD_TIMEOUT_S ?? 300) * 1000;
 class GuardTimeout extends Error {}
 
 /** `runPair`, printing one progress line when it finishes; throws `GuardTimeout` after GUARD_TIMEOUT_MS. */
