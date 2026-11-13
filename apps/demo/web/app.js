@@ -10,7 +10,7 @@ const BRAND = {
   badge: (bond, windowS) => `${BRAND.name} ✓ · bonded ${bond} USDC · refunds for ${windowS} s`,
   intro: "Your agent paid 0.40 for data. The data was wrong. Now what?",
   builtAt: "Built at NEAR HACKATHON",
-  repoUrl: "", // the ONE place for the repository link; filled in once it is public (empty: no link shown)
+  repoUrl: "https://github.com/natgurlain/certo", // the ONE place for the repository link (empty: no link shown)
 };
 
 // Refund window shown before the first call carries `windowMs`; demo value from DESIGN 4.2.

@@ -8,7 +8,7 @@
 
 ![Scene 2: asked NEAR, got NEO; three signed votes, verified in the browser and by the contract; refund from the bond](apps/demo/web/screenshots/scene2-end.png)
 
-<!-- FILL: repository URL · X post with the 60 s video · hosted replay URL (or delete) -->
+[github.com/natgurlain/certo](https://github.com/natgurlain/certo) <!-- FILL: X post with the 60 s video · hosted replay URL (or delete) -->
 MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt)
 
 ## Try it

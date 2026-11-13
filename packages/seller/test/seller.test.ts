@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   decodeHeader, ed25519FromLabel, encodeHeader, HDR_PAYMENT_REQUIRED, HDR_PAYMENT_RESPONSE, HDR_PAYMENT_SIGNATURE, PAYMENT_SCHEME,
-  receiptText, requestCanon, sha256Hex, toHex, verifyBase64, type PaymentRequired, type PaymentResponse, type PaymentSignature,
+  receiptText, REPO_URL, requestCanon, sha256Hex, toHex, verifyBase64, type PaymentRequired, type PaymentResponse, type PaymentSignature,
 } from '@certo/core';
 import { FakeChain } from '@certo/core/testing';
 import { createAnswerBot, MAX_SIGNED_BODY, protect, SCHEME_HINT } from '../src/index.js';
@@ -74,7 +74,7 @@ describe('protect()', () => {
       extra: { seller: SELLER, termsId: 'holders-v1', windowMs: 120000, feeBps: 100 },
     });
     expect(pr.accepts[0]!.extra.quoteId).toMatch(/^[0-9a-f]{32}$/);
-    expect(pr.accepts[0]!.extra.docs).toBe('');
+    expect(pr.accepts[0]!.extra.docs).toBe(REPO_URL);
     expect(pr.resource.description).toBe(SCHEME_HINT);
     expect(SCHEME_HINT).toMatch(/certo-bonded.*npx certo call <url>.*certo-mcp/);
     expect(await r.json()).toEqual(pr);
