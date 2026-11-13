@@ -78,7 +78,8 @@ body { font-family: var(--sans); color: var(--text); font-size: 20px; line-heigh
 .lane-seller .card.active { border-color: var(--seller); }
 .card-head { display: flex; align-items: center; gap: 12px; height: 36px; }
 .name { font-family: var(--mono); font-size: 24px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.role { font-size: 18px; color: var(--muted); }
+.role { font-size: 18px; line-height: 1.05; color: var(--muted); }
+.card-head .name { flex-shrink: 0; } /* the role text wraps before the name is cut */
 .spacer { flex: 1; }
 label, .label { font-size: 18px; color: var(--muted); display: block; }
 .big { font-size: 50px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
