@@ -23,8 +23,8 @@ gave 10 NEAR per new account; a second faucet account topped `certo.testnet` up.
 | Contract | `res/certo.wasm` on `CERTO_CONTRACT`; owner `CERTO_OWNER`, resolver `RESOLVER_ACCOUNT` |
 | Token | `res/mock_usdc.wasm` (mock USDC, 6 decimals, open `mint`) on `CERTO_TOKEN` |
 | Contract settings | as `make demo`, except the seller's answer/cure window: **30 s** (`answer_ms` 30000; 5 s in `make demo`). Dispute window 120 s, resolver slot 60 s, panel deadline 300 s |
-| Sellers | `chainfacts`, `cheapfacts` registered with the demo terms `holders-v1`; bond topped up to 50.000000 before each run. Their receipt keys are derived from each seller's NEAR secret key (not published) |
-| Buyers | `scout`, `scout-liar`; balance topped up to 10.000000 mock USDC before each run |
+| Sellers | `honest-api`, `shady-api` registered with the demo terms `holders-v1`; bond topped up to 50.000000 before each run. Their receipt keys are derived from each seller's NEAR secret key (not published) |
+| Buyers | `agent`, `liar-agent`; balance topped up to 10.000000 mock USDC before each run |
 | HTTP | The two demo sellers and the panel service run on this machine (127.0.0.1), as in `make demo` |
 | Juror keys on the contract | `fixtures/jurors.json` (NEAR AI keys) by default; the published TEST keys only with `TESTNET_JURORS=synthetic` |
 
@@ -46,10 +46,10 @@ Funding needed per account (the dry run in step 4 checks these minimums):
 | `usdc.certo.testnet` | `CERTO_TOKEN` | 2 NEAR | code storage of a 167 KB wasm (~1.7 NEAR) plus balances |
 | `resolver.certo.testnet` | `RESOLVER_ACCOUNT` | 0.5 NEAR | gas for `resolve` |
 | `sellers.certo.testnet` | (none) | 0.1 NEAR left | parent of the seller accounts only |
-| `chainfacts.sellers.certo.testnet` | `SELLER_CHAINFACTS_ACCOUNT` | 1.5 NEAR | 1 NEAR registration deposit, gas |
-| `cheapfacts.sellers.certo.testnet` | `SELLER_CHEAPFACTS_ACCOUNT` | 1.5 NEAR | as above |
-| `scout.certo.testnet` | `BUYER_SCOUT_ACCOUNT` | 0.5 NEAR | gas |
-| `scout-liar.certo.testnet` | `BUYER_SCOUT_LIAR_ACCOUNT` | 0.5 NEAR | gas |
+| `honest-api.sellers.certo.testnet` | `SELLER_HONEST_API_ACCOUNT` | 1.5 NEAR | 1 NEAR registration deposit, gas |
+| `shady-api.sellers.certo.testnet` | `SELLER_SHADY_API_ACCOUNT` | 1.5 NEAR | as above |
+| `agent.certo.testnet` | `BUYER_AGENT_ACCOUNT` | 0.5 NEAR | gas |
+| `liar-agent.certo.testnet` | `BUYER_LIAR_AGENT_ACCOUNT` | 0.5 NEAR | gas |
 
 Total about 13 NEAR. How much the faucet gives a new account is not verified here; check with
 `near state certo.testnet` after the first command and top up from https://near-faucet.io
@@ -62,11 +62,11 @@ near state certo.testnet                      # need ≥ 13.5 NEAR before the ne
 near create-account v1.certo.testnet        --masterAccount certo.testnet --initialBalance 5.5
 near create-account usdc.certo.testnet      --masterAccount certo.testnet --initialBalance 2.5
 near create-account resolver.certo.testnet  --masterAccount certo.testnet --initialBalance 0.6
-near create-account scout.certo.testnet     --masterAccount certo.testnet --initialBalance 0.6
-near create-account scout-liar.certo.testnet --masterAccount certo.testnet --initialBalance 0.6
+near create-account agent.certo.testnet     --masterAccount certo.testnet --initialBalance 0.6
+near create-account liar-agent.certo.testnet --masterAccount certo.testnet --initialBalance 0.6
 near create-account sellers.certo.testnet   --masterAccount certo.testnet --initialBalance 3.4
-near create-account chainfacts.sellers.certo.testnet --masterAccount sellers.certo.testnet --initialBalance 1.6
-near create-account cheapfacts.sellers.certo.testnet --masterAccount sellers.certo.testnet --initialBalance 1.6
+near create-account honest-api.sellers.certo.testnet --masterAccount sellers.certo.testnet --initialBalance 1.6
+near create-account shady-api.sellers.certo.testnet  --masterAccount sellers.certo.testnet --initialBalance 1.6
 ```
 
 If a name is taken, choose others and put them in `.env`; any `.testnet` names work.
@@ -84,10 +84,10 @@ for pair in \
   CERTO_CONTRACT_PRIVATE_KEY:v1.certo.testnet \
   CERTO_TOKEN_PRIVATE_KEY:usdc.certo.testnet \
   RESOLVER_PRIVATE_KEY:resolver.certo.testnet \
-  SELLER_CHAINFACTS_PRIVATE_KEY:chainfacts.sellers.certo.testnet \
-  SELLER_CHEAPFACTS_PRIVATE_KEY:cheapfacts.sellers.certo.testnet \
-  BUYER_SCOUT_PRIVATE_KEY:scout.certo.testnet \
-  BUYER_SCOUT_LIAR_PRIVATE_KEY:scout-liar.certo.testnet; do
+  SELLER_HONEST_API_PRIVATE_KEY:honest-api.sellers.certo.testnet \
+  SELLER_SHADY_API_PRIVATE_KEY:shady-api.sellers.certo.testnet \
+  BUYER_AGENT_PRIVATE_KEY:agent.certo.testnet \
+  BUYER_LIAR_AGENT_PRIVATE_KEY:liar-agent.certo.testnet; do
   echo "${pair%%:*}=$(node -p "require(process.env.HOME + '/.near-credentials/testnet/${pair#*:}.json').private_key")" >> .env
 done
 chmod 600 .env
@@ -163,21 +163,21 @@ token usdc.certo.testnet: deploying res/mock_usdc.wasm and calling new
   deploy token: https://testnet.nearblocks.io/txns/<hash>
 contract v1.certo.testnet: deploying res/certo.wasm and calling new
   deploy contract: https://testnet.nearblocks.io/txns/<hash>
-  register_seller chainfacts: https://testnet.nearblocks.io/txns/<hash>
+  register_seller honest-api: https://testnet.nearblocks.io/txns/<hash>
   …
-buyer scout-liar scout-liar.certo.testnet: 10.000000 mock USDC
+buyer liar-agent liar-agent.certo.testnet: 10.000000 mock USDC
 ```
 
 Then the same numbered transcript as `make demo`, with explorer links in place of short hashes,
 the four scene lines, a list of every transaction of the run, and the final line:
 
 ```text
-Scene 1 honest call: scout paid chainfacts 0.400000, fee 0.004000 (1.0%), seller balance +0.396000 in the paying transaction https://testnet.nearblocks.io/txns/<hash>
+Scene 1 honest call: agent paid honest-api 0.400000, fee 0.004000 (1.0%), seller balance +0.396000 in the paying transaction https://testnet.nearblocks.io/txns/<hash>
 Scene 2 asked NEAR, got NEO: content dispute, votes buyer/buyer/buyer, 3 signatures verified by contract, refund 0.400000, bond 50.000000 → 49.580000, fee 1.0% → 1.5%
-Scene 3 lying buyer: scout-liar disputed correct data, votes seller/seller/seller, buyer stake 0.020000 forfeited; chainfacts bond 50.000000 unchanged, fee stays 1.0%
+Scene 3 lying buyer: liar-agent disputed correct data, votes seller/seller/seller, buyer stake 0.020000 forfeited; honest-api bond 50.000000 unchanged, fee stays 1.0%
 Scene 4 seller dead: seller did not answer in 30 s (testnet setting), refund 0.400000 by rule, no panel, bond 49.580000 → 49.160000, fee 1.5% → 2.5% (loss recorded)
 testnet transactions of this run (14):
-  scout      ft_transfer_call(pay)      https://testnet.nearblocks.io/txns/<hash>
+  agent      ft_transfer_call(pay)      https://testnet.nearblocks.io/txns/<hash>
   …
 DEMO OK: 4/4 scenes, 3/3 juror signatures verified on chain
 ```
@@ -187,8 +187,8 @@ The page at http://localhost:4020 shows "Chain: NEAR testnet" (`make testnet-dem
 `--keep-open`; use `NEAR_NETWORK=testnet npx tsx apps/demo/run.ts --keep-open` to keep it up).
 
 On a second run on the same accounts the numbers differ where the contract keeps history, and
-the runner checks the step instead of the absolute value: `cheapfacts` starts in a higher fee
-tier (2.5% → 5.0%, then capped at 5.0%), and `scout-liar`'s stake doubles after each lost
+the runner checks the step instead of the absolute value: `shady-api` starts in a higher fee
+tier (2.5% → 5.0%, then capped at 5.0%), and `liar-agent`'s stake doubles after each lost
 dispute (0.040000, 0.080000, …). Bonds and buyer balances are topped up, so the bond figures repeat.
 For README numbers, use the first run on fresh accounts.
 

@@ -26,9 +26,9 @@ make guards    # ten attacks: each refused (or settled by rule) by the real cont
 `make demo` ends with these lines (amounts are read from the chain and compared; a mismatch exits 1):
 
 ```text
-Scene 1 honest call: scout paid chainfacts 0.400000, fee 0.004000 (1.0%), seller balance +0.396000 in the paying transaction …
+Scene 1 honest call: agent paid honest-api 0.400000, fee 0.004000 (1.0%), seller balance +0.396000 in the paying transaction …
 Scene 2 asked NEAR, got NEO: content dispute, votes buyer/buyer/buyer, 3 signatures verified by contract, refund 0.400000, bond 50.000000 → 49.580000, fee 1.0% → 1.5%
-Scene 3 lying buyer: scout-liar disputed correct data, votes seller/seller/seller, buyer stake 0.020000 forfeited; chainfacts bond 50.000000 unchanged, fee stays 1.0%
+Scene 3 lying buyer: liar-agent disputed correct data, votes seller/seller/seller, buyer stake 0.020000 forfeited; honest-api bond 50.000000 unchanged, fee stays 1.0%
 Scene 4 seller dead: seller did not answer in 5 s (demo setting; 30 s on testnet), refund 0.400000 by rule, no panel, bond 49.580000 → 49.160000, fee 1.5% → 2.5% (second loss)
 Scene 5 forged vote: one byte of Qwen's answer Y → X changed after signing; certo rejected it with E_BALLOT_SIG; res/guards/certo_no_g1.wasm (check compiled out) counted it, votes buyer/seller/seller
 DEMO OK: 5/5 scenes, 3/3 juror signatures verified on chain
@@ -50,7 +50,7 @@ claude mcp add certo -- npx certo-mcp --playground   # from this repo; Codex: co
 # then start a new Claude Code session in this repo so it loads the server
 ```
 
-`make playground` ends with `PLAYGROUND READY`, the page URL, the env file it wrote (`~/.certo/playground.env`, deleted on exit) and three prompts to try. The two sellers are `cheapfacts` (http://127.0.0.1:4031, answers NEO when asked for NEAR) and `chainfacts` (http://127.0.0.1:4030, honest).
+`make playground` ends with `PLAYGROUND READY`, the page URL, the env file it wrote (`~/.certo/playground.env`, deleted on exit) and three prompts to try. The two sellers are `shady-api` (http://127.0.0.1:4031, answers NEO when asked for NEAR) and `honest-api` (http://127.0.0.1:4030, honest).
 
 | # | Tool call | Expect in the result (measured 2026-11-11) |
 |---|---|---|

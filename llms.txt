@@ -11,7 +11,7 @@
 ## MCP tools (all amounts in results are USDC decimal strings, fields ending in _usdc)
 - certo_quote {url}: look without paying: price, bond, free capacity, fee, record (incl. split_disputes), refund window, terms, panel ("experimental" or "off": refunds by rule only), your dispute stake. Example: {"url":"http://127.0.0.1:PORT/v1/holders?token=NEAR&top=5"}
 - certo_call {url, method?, body?, max_price?}: pay and get the body, call_id, refund_window_until. Refused above CERTO_MAX_PRICE (default 1.00 USDC). Example: {"url":"...","max_price":0.5}
-- certo_dispute {call_id, kind?, offer_pct?, wait_s?}: get money back; waits (default 90 s) and returns the final outcome with refund_usdc. Example: {"call_id":"cheapfacts/9f0c..."}
+- certo_dispute {call_id, kind?, offer_pct?, wait_s?}: get money back; waits (default 90 s) and returns the final outcome with refund_usdc. Example: {"call_id":"shady-api/9f0c..."}
 - Playground limits: the demo sellers sell only their example URL (anything else: 404 before payment, nothing charged); the playground panel replays recorded answers and knows only a 100% content offer on the two example URLs. Any other content dispute returns at once with state "no_panel" and the time the panel-timeout rule settles it (seller's offer refunded, stake back). Set NEARAI_API_KEY before `make playground` for a live panel
 - certo_status {call_id?, seller?}: open / released (seller kept it) / in_dispute / refunded / cured / unknown (never paid from here)
 
