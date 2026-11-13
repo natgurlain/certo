@@ -153,7 +153,7 @@ figcaption { margin-top: 16px; }
 .f-tag text { fill: var(--green); font: 600 11px var(--sans); text-anchor: middle; }
 .f-tag { opacity: 0; transition: opacity .35s; }
 .f-coin { fill: #2a3446; stroke: #6d7b92; stroke-width: 1; }
-.f-coin-t { fill: var(--text); font: 650 8.5px var(--mono); text-anchor: middle; }
+.f-coin-t { fill: var(--text); font: 650 9px var(--sans); text-anchor: middle; font-variant-numeric: tabular-nums; }
 .f-coin-back { fill: var(--green); stroke: none; }
 .f-coin-back-t { fill: var(--green-ink); }
 .f-chip { fill: var(--bg); stroke: var(--line-2); }
@@ -396,9 +396,13 @@ li[data-state="na"] .vk::before { content: "–"; color: var(--text-3); }
   .flow { margin-top: 56px; max-width: 560px; margin-left: auto; margin-right: auto; width: 100%; }
   .topnav { display: none; }
   .topbar .btn { margin-left: auto; }
-  .cards3 { grid-template-columns: 1fr; max-width: 640px; margin-left: auto; margin-right: auto; }
+  .cards3 { grid-template-columns: minmax(0, 1fr); }
+  .pcard { display: grid; grid-template-columns: 260px minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: 28px; align-items: start; }
+  .pcard .pfig-box { grid-row: 1 / span 2; align-self: center; }
+  .pcard h3 { margin-top: 0; }
+  .pcard p { margin-top: 8px; }
   .calls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .steps { grid-template-columns: minmax(0, 1fr); max-width: 640px; }
+  .steps { grid-template-columns: minmax(0, 1fr); }
   .step { display: grid; grid-template-columns: 220px minmax(0, 1fr); align-items: center; padding: 16px; }
   .step-text { padding: 0 8px 0 0; }
   .footer-nav { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 15px; grid-column: 1 / -1; }
@@ -419,13 +423,14 @@ li[data-state="na"] .vk::before { content: "–"; color: var(--text-3); }
   .actions .btn { width: 100%; }
   .flow { margin-top: 44px; }
   .flow-card { padding: 10px; }
+  .flow::before { inset: -8% 0 4%; }
   .flow-caption { font-size: 17px; line-height: 26px; }
   .problem { padding-top: 88px; }
   .cards3, .cols2, .calls, .ways, .road { grid-template-columns: minmax(0, 1fr); }
   .cards3 { margin-top: 36px; gap: 16px; }
   .cols2 { margin-top: 32px; gap: 16px; }
   .card { padding: 22px; }
-  .pcard { padding: 22px 22px 26px; }
+  .pcard { display: flex; padding: 22px 22px 26px; }
   .pcard h3 { font-size: 20px; line-height: 28px; margin-top: 18px; }
   .note { text-align: left; }
   .steps { margin-top: 36px; gap: 16px; grid-template-columns: minmax(0, 1fr); }
@@ -473,3 +478,4 @@ li[data-state="na"] .vk::before { content: "–"; color: var(--text-3); }
   .verify-copy, .verify-grid .vbox { grid-column: 1 / -1; }
   .verify-grid .vbox { margin-top: 32px; }
 }
+.vbox > .vlines:first-child { margin-top: 0; }
