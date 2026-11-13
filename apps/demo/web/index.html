@@ -3,7 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>demo</title>
+<title>Certo: agents pay instantly, bad calls get refunded</title>
+<meta name="description" content="Replay of a real NEAR testnet run: an AI agent pays for an API call, gets the wrong data, and is refunded from the seller's bond after three NEAR AI enclave signatures are verified by the contract.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Certo">
+<meta property="og:url" content="https://certo-bice.vercel.app/">
+<meta property="og:title" content="Certo: agents pay instantly, bad calls get refunded">
+<meta property="og:description" content="Replay of a real NEAR testnet run: an AI agent pays for an API call, gets the wrong data, and is refunded from the seller's bond after three NEAR AI enclave signatures are verified by the contract.">
+<meta property="og:image" content="https://certo-bice.vercel.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Certo replay at the scene 2 verdict: three NEAR AI jurors vote 3–0 for the buyer, each signature verified, 0.40 refunded from the seller's bond">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Certo: agents pay instantly, bad calls get refunded">
+<meta name="twitter:description" content="Replay of a real NEAR testnet run: an AI agent pays for an API call, gets the wrong data, and is refunded from the seller's bond after three NEAR AI enclave signatures are verified by the contract.">
+<meta name="twitter:image" content="https://certo-bice.vercel.app/og.png">
+<meta name="twitter:image:alt" content="The Certo replay at the scene 2 verdict: three NEAR AI jurors vote 3–0 for the buyer, each signature verified, 0.40 refunded from the seller's bond">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -20,7 +35,7 @@
     </div>
   </header>
 
-  <div class="caption" id="caption"><span id="caption-text">Connecting to the demo feed…</span></div>
+  <div class="caption" id="caption"><span id="caption-text">Connecting to the demo feed…</span><button id="verify" class="verify hidden" type="button" title="Read the contract and the scene 2 transaction from NEAR testnet and check the three juror signatures in this browser">Don't trust this page: verify on NEAR testnet</button></div>
 
   <main class="lanes">
     <section class="lane lane-buyer">
@@ -57,6 +72,16 @@
     <div class="end-built" data-brand="built"></div>
   </div>
   <div id="flyers"></div>
+  <div id="verify-panel" class="overlay vpanel hidden" role="dialog" aria-modal="true" aria-label="Verification on NEAR testnet"><div class="vcard" id="verify-card"></div></div>
+</div>
+<div id="phone" class="phone">
+  <div class="phone-name" data-brand="name"></div>
+  <div class="phone-tag" data-brand="tagline"></div>
+  <p class="phone-note">Best on a desktop: this page is a 1920×1080 replay of the run. Here is what it shows.</p>
+  <div class="phone-mode" id="phone-mode"></div>
+  <ol class="phone-facts" id="phone-facts"></ol>
+  <div class="phone-done" id="phone-done"></div>
+  <ul class="phone-links" id="phone-links"></ul>
 </div>
 <script type="module" src="app.js"></script>
 </body>
