@@ -10,7 +10,7 @@
 
 ![Scene 2: asked NEAR, got NEO; three signed votes, verified in the browser and by the contract; refund from the bond](apps/demo/web/screenshots/scene2-end.png)
 
-[github.com/natgurlain/certo](https://github.com/natgurlain/certo) · **watch the replay:** [certo-bice.vercel.app](https://certo-bice.vercel.app) (the NEAR testnet run; [local run with all five scenes](https://certo-bice.vercel.app/?feed=local.json)) <!-- FILL: X post with the video -->
+[github.com/natgurlain/certo](https://github.com/natgurlain/certo) · **watch the replay:** [certo-bice.vercel.app](https://certo-bice.vercel.app) (the NEAR testnet run; press **Don't trust this page: verify on NEAR testnet** and your browser reads the contract and the ruling from the testnet RPC and re-checks the three signatures itself; [local run with all five scenes](https://certo-bice.vercel.app/?feed=local.json)) <!-- FILL: X post with the video -->
 MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt) · **live on NEAR testnet:** [a refund decided by three verified NEAR AI signatures](https://testnet.nearblocks.io/txns/GvLdsJhSThMtC8M86ZkQ4wNxGsFaNV9Ny3234MsuLzBn) ([all transactions](#7-testnet))
 
 ## Try it
@@ -120,7 +120,7 @@ Every row has a test and a command. `cargo test` needs Rust; everything else nee
 | Content dispute: sealed buyer offer, seller offer, three ballots verified on chain, majority, split, panel-timeout rule | `contracts/certo/src/panel.rs`, `dispute.rs` | `make demo` scenes 2, 3, 5; `make guards` G1, G7, G8, G16, G17 |
 | Fees follow the record (1.0% → 1.5% → 2.5%); the buyer's stake doubles after a lost dispute | `contracts/certo/src/fees.rs` | `make demo` scenes 2–4 (fees); `cargo test -p certo --lib fees` (stake); repeated testnet runs show the stake at 0.02 → 0.04 → 0.08 |
 | Panel service, live and replay | `packages/panel/src/` | `npm test -w @certo/panel` |
-| Demo page from the event feed: paced replay, browser-side signature check, scene 5 forgery | `apps/demo/` | `make playground`, open http://localhost:4020, press Replay |
+| Demo page from the event feed: paced replay, browser-side signature check, scene 5 forgery | `apps/demo/`; on-chain re-check `apps/demo/web/verify.js` | `make playground`, open http://localhost:4020, press Replay |
 | Offline check of recorded ballots and attestation binding | `scripts/verify-recorded.ts` | `make verify` |
 | TypeScript and Rust encoders agree byte for byte | `fixtures/vectors.json` | `npm test -w @certo/tests` |
 
@@ -179,6 +179,8 @@ Run on NEAR testnet on 2026-11-13 with the final contract (`res/certo.wasm`, SHA
 | Scene 2: `resolve`, three NEAR AI signatures verified, refund 0.40 to the buyer (`ballots_verified`, `dispute_resolved` tier `panel`) | [GvLdsJhS…](https://testnet.nearblocks.io/txns/GvLdsJhSThMtC8M86ZkQ4wNxGsFaNV9Ny3234MsuLzBn) |
 | Scene 3: `resolve`, panel for the seller, lying buyer's stake forfeited | [EMgb4xaK…](https://testnet.nearblocks.io/txns/EMgb4xaKY6pmbPAW7A5McJvN486NjgnsJk5d8Wum6Xxe) |
 | Scene 4: `resolve_default`, seller did not answer, refund by rule | [38EC8Zxw…](https://testnet.nearblocks.io/txns/38EC8ZxwEeuFU12bFrmjn4oUtA9rnWixVXZ2dYcXLq6K) |
+
+![The hosted replay re-checking the scene 2 ruling against NEAR testnet from the browser](apps/demo/web/screenshots/verify-testnet.png)
 
 ## 8. Prior art
 
