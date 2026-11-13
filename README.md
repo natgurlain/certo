@@ -213,7 +213,7 @@ Certo is the recourse layer; the aim is to make agent payments refundable on any
 
 - Window 2026-10-19 to 2026-11-14. Design written 2026-11-10 ([docs/DESIGN.md](docs/DESIGN.md)); first commit 2026-11-11 (`70720fa`). No code from before the window.
 - Team: natgurlain. Other submissions by the same person: none.
-- AI coding agents: Claude Code (Anthropic) wrote the code and documents in this repository, with Claude subagents as builders and an independent Claude reviewer for the design, three review rounds and the split rule. The human chose the product and its name, made the shipping decisions (the AI panel ships experimental and opt-in; the split rule was delegated to the reviewer), supplied the NEAR AI key and approved each step.
+- Built with Claude Code (Anthropic), which wrote the code and documents (AI code is allowed, Q-005). Product, design decisions and review: natgurlain.
 - Libraries: `near-sdk` and `near-contract-standards` 5.28.3, `serde_json`, `near-workspaces`; `@near-js/*` 2.5, `near-sandbox` 0.3.5, `express` 5, `@modelcontextprotocol/sdk`, `zod`, `vitest`, `tsx`. Versions and pins: [docs/CONTRACT_NOTES.md](docs/CONTRACT_NOTES.md). No templates.
 - External services: NEAR AI Cloud (attestation reports, chat completions with signatures); NEAR testnet RPC.
 
