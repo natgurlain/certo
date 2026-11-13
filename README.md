@@ -13,7 +13,7 @@ MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt) · **live on NEAR t
 
 ## Try it
 
-Node ≥ 20 on macOS arm64 or Linux x86-64. No keys, no accounts, no Rust. The first run downloads a 26–33 MB NEAR sandbox binary ([platform notes](docs/CONTRACT_NOTES.md)).
+Node 20 or 22 on macOS arm64 or Linux x86-64 (npm may print an `EBADENGINE` warning because `near-sandbox` declares Node 22.22.2; it runs on 20 and 22.16). No keys, no accounts, no Rust. The first run downloads a 26–33 MB NEAR sandbox binary ([platform notes](docs/CONTRACT_NOTES.md)).
 
 ```sh
 npm ci
@@ -45,6 +45,7 @@ You can be the buyer. Three tool calls.
 ```sh
 make playground                                      # the five scenes, then keeps the sandbox, both sellers, the panel and a funded buyer running
 claude mcp add certo -- npx certo-mcp --playground   # from this repo; Codex: command npx, args ["certo-mcp","--playground"], tool_timeout_sec = 120
+# then start a new Claude Code session in this repo so it loads the server
 ```
 
 `make playground` ends with `PLAYGROUND READY`, the page URL, the env file it wrote (`~/.certo/playground.env`, deleted on exit) and three prompts to try. The two sellers are `cheapfacts` (http://127.0.0.1:4031, answers NEO when asked for NEAR) and `chainfacts` (http://127.0.0.1:4030, honest).
@@ -55,7 +56,7 @@ claude mcp add certo -- npx certo-mcp --playground   # from this repo; Codex: co
 | 2 | `certo_call {"url": <same>}` | `http_status 200`, `receipt_verified true`, a `call_id`, a body whose `token` is `"NEO"`, `suggested.action "dispute"` |
 | 3 | `certo_dispute {"call_id": <from 2>}` | in one call: `outcome.result "refunded"`, `refund_usdc "0.400000"`, `stake_back_usdc "0.020000"`, `tier "panel"`, `votes ["buyer","buyer","buyer"]`, the `resolve` transaction |
 
-The three calls took 3–4 s in all against the recorded panel. Another query or another offer has no recording: `certo_dispute` then says `no_panel` at once and when the timeout rule will settle it (or set `NEARAI_API_KEY` for a live panel). A request a seller does not sell is refused before payment. `certo_status {"call_id": …}` then says `refunded`. The buyer never pays more than `CERTO_MAX_PRICE` (default 1.00 USDC) per call. From a shell: `npx certo --playground quote|call|dispute …`. Tools, units and error codes: [llms.txt](llms.txt).
+The three calls took 3–4 s in all against the recorded panel. Another query or another offer has no recording: `certo_dispute` then says `no_panel` at once and when the timeout rule will settle it (or set `NEARAI_API_KEY` for a live panel). A request a seller does not sell is refused before payment. `certo_status {"call_id": …}` then says `refunded`. The buyer never pays more than `CERTO_MAX_PRICE` (default 1.00 USDC) per call. From a shell (quote the URL; zsh treats `?` as a glob): `npx certo --playground quote "http://127.0.0.1:4031/v1/holders?token=NEAR&top=5"`, then `call` and `dispute <call_id>`. Tools, units and error codes: [llms.txt](llms.txt).
 
 ## 1. The problem
 
@@ -69,7 +70,7 @@ A payment by an agent for an API call is final. If the response is an error, mis
 | NEAR AI Cloud: three juror models of three families (`Qwen/Qwen3.8-27B`, `z-ai/glm-5.3-flash`, `deepseek-ai/DeepSeek-V4.1-Flash-1017`), each signing with its own enclave key (`provider_tee`, ed25519 over the sha256 of the sent body) | `fixtures/jurors.json`, `fixtures/attestations/`, `fixtures/panel/` | `make verify` (375 recorded ballots); `make probe` (needs a key) |
 | NEP-141 `ft_transfer_call`: payment, bond and dispute stake each enter the contract in one transaction, and the seller's payout leaves in the same one | `contracts/certo/src/pay.rs` | Scene 1; `cargo test -p certo --test sandbox t06_pay_moves_price_minus_fee_to_seller_in_same_tx` |
 | NEP-297 events for every state change; the page is drawn only from them | `contracts/certo/src/events.rs`, `apps/demo/EVENTS.md` | the page footer |
-| Function-call access key: `certo seller init` gives the seller's answer bot a key limited to `answer` and `cure` | `packages/buyer/src/cli.ts`, `packages/seller/src/bot.ts` | `npm test -w @certo/mcp` ("certo seller init registers, publishes terms, bonds…"; `withdraw_bond` with that key is refused) |
+| Function-call access key: `certo seller init` gives the seller's answer bot a key limited to `answer` and `cure` | `packages/seller/src/init.ts`, `packages/seller/src/bot.ts` | `npm test -w @certo/mcp` ("certo seller init registers, publishes terms, bonds…"; `withdraw_bond` with that key is refused) |
 | Named sub-accounts: `v1.certo.testnet`, `<seller>.sellers.certo.testnet` | `docs/TESTNET.md` | [Testnet](#7-testnet) |
 
 ## 3. What is real, what is not
@@ -149,7 +150,7 @@ Apple M2, macOS, nearcore 2.10.0 sandbox, 2026-11-11. Wall-clock times vary betw
 | `cargo test --workspace` | 63 tests, about 5 min | `cargo test --workspace` |
 | Panel, live: three answers with full reasoning and three enclave signatures | median 23 s, 95th percentile 120 s (kill test, reserve set); a single probe took 5.9 s | `make killtest`, `make probe` (need a key) |
 | Gas, `resolve` with three short test ballots | 10.64 TGas | `cargo test -p certo --test sandbox t08_panel_buyer_wins -- --nocapture` |
-| Gas, pay with payout | 11.56 TGas | `cargo test -p certo --test sandbox t06_pay_moves -- --nocapture` |
+| Gas, pay with payout | 11.6–11.8 TGas (varies with contract state) | `cargo test -p certo --test sandbox t06_pay_moves -- --nocapture` |
 | Contract size | `res/certo.wasm` 356,230 bytes (~3.6 NEAR storage), SHA-256 `aca96429481139397fe5e265659a9fe9a85093dddf827766d58c189ec7299b71` | `cat res/SHA256SUMS` |
 | Kill-test cost | 0.46 USD for both runs (663 ballots) | `docs/KILLTEST.md` |
 

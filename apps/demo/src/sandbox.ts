@@ -5,7 +5,7 @@
  * `near-workspaces` wraps), pinned to nearcore `SANDBOX_VERSION`, which it
  * downloads on first use. 2.10.0 is the newest release whose Linux x86-64
  * binary loads with glibc 2.34 (Ubuntu 22.04, Debian 12); later ones need
- * glibc 2.39 (README "Requirements"). `NEAR_SANDBOX_BIN_PATH` points it at an
+ * glibc 2.39 (docs/CONTRACT_NOTES.md, platform notes). `NEAR_SANDBOX_BIN_PATH` points it at an
  * existing binary instead. Accounts are created in genesis, so no
  * account-creation transactions are needed.
  */
@@ -45,7 +45,7 @@ function checkGlibc(): void {
   const [a, b] = [have, need].map((v) => v.split('.').map(Number));
   if (a[0] > b[0] || (a[0] === b[0] && (a[1] ?? 0) >= (b[1] ?? 0))) return;
   throw new Error(`the nearcore ${SANDBOX_VERSION} sandbox binary for Linux ${process.arch} needs glibc >= ${need}; this system has ${have}. `
-    + 'Use a newer distribution (README "Requirements"), or set NEAR_SANDBOX_BIN_PATH to a near-sandbox binary that runs here. `make verify` needs no chain.');
+    + 'Use a newer distribution (docs/CONTRACT_NOTES.md, platform notes), or set NEAR_SANDBOX_BIN_PATH to a near-sandbox binary that runs here. `make verify` needs no chain.');
 }
 
 export const WASM = {
