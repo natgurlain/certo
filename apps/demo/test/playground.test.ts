@@ -6,9 +6,9 @@ import { defaultStateDir, withPlayground } from '@certo/buyer';
 import { playgroundEnv, playgroundEnvPath, playgroundStateDir, writePlaygroundEnv, type PlaygroundInfo } from '../src/playground.js';
 
 const info: PlaygroundInfo = {
-  rpcUrl: 'http://127.0.0.1:3030', contract: 'certo', token: 'usdc', buyer: 'agent', buyerPrivateKey: 'ed25519:abc',
+  rpcUrl: 'http://127.0.0.1:3030', contract: 'certo', token: 'usdc', buyer: 'you', buyerPrivateKey: 'ed25519:abc',
   panelUrl: 'http://127.0.0.1:5000',
-  exampleUrls: { chainfacts: 'http://127.0.0.1:4030/v1/holders?token=NEAR&top=5', cheapfacts: 'http://127.0.0.1:4031/v1/holders?token=NEAR&top=5' },
+  exampleUrls: { 'honest-api': 'http://127.0.0.1:4030/v1/holders?token=NEAR&top=5', 'shady-api': 'http://127.0.0.1:4031/v1/holders?token=NEAR&top=5' },
 };
 
 describe('playground.env', () => {
@@ -19,8 +19,8 @@ describe('playground.env', () => {
     }));
     expect(vars).toEqual({
       NEAR_NETWORK: 'sandbox', NEAR_RPC_URL: 'http://127.0.0.1:3030', CERTO_CONTRACT: 'certo', CERTO_TOKEN: 'usdc',
-      BUYER_ACCOUNT: 'agent', BUYER_PRIVATE_KEY: 'ed25519:abc', PANEL_URL: 'http://127.0.0.1:5000',
-      CERTO_EXAMPLE_URLS: 'chainfacts=http://127.0.0.1:4030/v1/holders?token=NEAR&top=5,cheapfacts=http://127.0.0.1:4031/v1/holders?token=NEAR&top=5',
+      BUYER_ACCOUNT: 'you', BUYER_PRIVATE_KEY: 'ed25519:abc', PANEL_URL: 'http://127.0.0.1:5000',
+      CERTO_EXAMPLE_URLS: 'honest-api=http://127.0.0.1:4030/v1/holders?token=NEAR&top=5,shady-api=http://127.0.0.1:4031/v1/holders?token=NEAR&top=5',
     });
   });
 
@@ -39,11 +39,11 @@ describe('playground.env', () => {
     const calls = playgroundStateDir(info, path);
     expect(calls).toBe(join(home, 'calls', 'sandbox', 'certo'));
     mkdirSync(calls, { recursive: true });
-    writeFileSync(join(calls, 'cheapfacts_old.json'), '{"outcome":{"result":"refunded"}}');
+    writeFileSync(join(calls, 'shady-api_old.json'), '{"outcome":{"result":"refunded"}}');
     writePlaygroundEnv(info, path);
     // the directory certo --playground and certo-mcp --playground use for this sandbox
     expect(defaultStateDir(withPlayground({ CERTO_HOME: home }))).toBe(calls);
-    expect(existsSync(join(calls, 'cheapfacts_old.json'))).toBe(false);
+    expect(existsSync(join(calls, 'shady-api_old.json'))).toBe(false);
   });
 
   it('refuses a value that would need quoting', () => {

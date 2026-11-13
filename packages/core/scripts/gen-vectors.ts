@@ -56,9 +56,9 @@ const PANEL_CASES = [
 export function generate() {
   const receiptKey = ed25519FromLabel('certo-vectors-receipt-key');
   const receipts = [
-    { contract: 'certo.test.near', callId: 'chainfacts.test.near/0123456789abcdef0123456789abcdef', buyer: 'scout.test.near', price: '400000', termsId: 'holders-v1', requestHash: sha256Hex(REQ_NEAR_TOP5), responseHash: sha256Hex(RESP_GOOD), statusCode: 200, servedAtMs: 1794300001234 },
-    { contract: 'certo.test.near', callId: 'cheapfacts.test.near/fedcba9876543210fedcba9876543210', buyer: 'scout.test.near', price: '400000', termsId: 'holders-v1', requestHash: sha256Hex(REQ_NEAR_TOP5), responseHash: sha256Hex('{"error":"upstream unavailable"}'), statusCode: 503, servedAtMs: 1794300005000 },
-    { contract: 'v1.certo.testnet', callId: 'chainfacts.sellers.certo.testnet/00000000000000000000000000000001', buyer: 'scout.testnet', price: '10000', termsId: 'a-1', requestHash: sha256Hex(REQ_POST), responseHash: sha256Hex(''), statusCode: 500, servedAtMs: 0 },
+    { contract: 'certo.test.near', callId: 'honest-api.test.near/0123456789abcdef0123456789abcdef', buyer: 'agent.test.near', price: '400000', termsId: 'holders-v1', requestHash: sha256Hex(REQ_NEAR_TOP5), responseHash: sha256Hex(RESP_GOOD), statusCode: 200, servedAtMs: 1794300001234 },
+    { contract: 'certo.test.near', callId: 'shady-api.test.near/fedcba9876543210fedcba9876543210', buyer: 'agent.test.near', price: '400000', termsId: 'holders-v1', requestHash: sha256Hex(REQ_NEAR_TOP5), responseHash: sha256Hex('{"error":"upstream unavailable"}'), statusCode: 503, servedAtMs: 1794300005000 },
+    { contract: 'v1.certo.testnet', callId: 'honest-api.sellers.certo.testnet/00000000000000000000000000000001', buyer: 'agent.testnet', price: '10000', termsId: 'a-1', requestHash: sha256Hex(REQ_POST), responseHash: sha256Hex(''), statusCode: 500, servedAtMs: 0 },
   ];
   return {
     version: 1,

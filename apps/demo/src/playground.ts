@@ -65,16 +65,16 @@ export function writePlaygroundEnv(p: PlaygroundInfo, path = playgroundEnvPath()
 
 /** The block printed once the playground is ready. */
 export function playgroundBanner(o: { pageUrl: string | null; envPath: string; exampleUrls: Record<string, string> }): string[] {
-  const { cheapfacts, chainfacts } = o.exampleUrls;
+  const { 'shady-api': shadyApi, 'honest-api': honestApi } = o.exampleUrls;
   return [
     '',
-    'PLAYGROUND READY: sandbox, sellers chainfacts and cheapfacts, panel and a funded buyer `agent` (10 USDC) stay up until Ctrl-C',
+    'PLAYGROUND READY: sandbox, sellers honest-api and shady-api, panel and a funded buyer `you` (10 USDC) stay up until Ctrl-C',
     ...(o.pageUrl ? [`  page (Replay button replays the scenes):  ${o.pageUrl}`] : []),
     `  env file (deleted on exit):  ${o.envPath}`,
     '  add to Claude Code:  claude mcp add certo -- npx certo-mcp --playground',
     '  then ask it:',
-    `    1. "Use certo to buy the top 5 NEAR holders from ${cheapfacts}"`,
+    `    1. "Use certo to buy the top 5 NEAR holders from ${shadyApi}"`,
     '    2. "Is that answer about the token you asked for? If not, dispute it with certo and tell me the refund."',
-    `    3. "Buy the same data from ${chainfacts} and check the seller was paid in the same transaction."`,
+    `    3. "Buy the same data from ${honestApi} and check the seller was paid in the same transaction."`,
   ];
 }

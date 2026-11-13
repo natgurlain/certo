@@ -6,12 +6,12 @@ import { startDemoSeller, type DemoSeller } from '../src/seller.js';
 
 const key = ed25519FromLabel('demo-seller-test');
 const chain = new FakeChain();
-chain.addSeller('chainfacts', toHex(key.publicKey));
-chain.addTermsFor('chainfacts', 'holders-v1', 'terms');
+chain.addSeller('honest-api', toHex(key.publicKey));
+chain.addTermsFor('honest-api', 'holders-v1', 'terms');
 let seller: DemoSeller;
 beforeAll(async () => {
   seller = await startDemoSeller({
-    id: 'chainfacts', chain: chain.as('chainfacts'), receiptKey: key, termsId: 'holders-v1', price: '400000',
+    id: 'honest-api', chain: chain.as('honest-api'), receiptKey: key, termsId: 'holders-v1', price: '400000',
     responses: { '/v1/holders?token=NEAR&top=5': '{"token":"NEAR"}' },
   });
 });

@@ -22,7 +22,7 @@ function mockChain(opts: { sellerBps?: number; status?: CallView['status']; buye
   const salt = opts.salt ?? newSalt();
   const resolved: unknown[] = [];
   const call: CallView = {
-    buyer: 'scout.test.near', seller: 'cheapfacts.test.near', terms_id: 'holders-v1', price: '400000', fee: '4000', reserve: '420000',
+    buyer: 'agent.test.near', seller: 'shady-api.test.near', terms_id: 'holders-v1', price: '400000', fee: '4000', reserve: '420000',
     request_hash: sha256Hex(REQ), paid_at_ms: 0, expires_at_ms: 120000, status: opts.status ?? 'Answered',
     dispute: {
       opened_at_ms: 1, stake: '20000', buyer_commit: offerCommit(opts.buyerBps ?? 10000, salt), response_hash: sha256Hex(RESP),
@@ -30,7 +30,7 @@ function mockChain(opts: { sellerBps?: number; status?: CallView['status']; buye
     },
   };
   const chain: PanelChain = {
-    getCall: async (id) => (id === 'cheapfacts.test.near/aa' ? call : null),
+    getCall: async (id) => (id === 'shady-api.test.near/aa' ? call : null),
     getTerms: async () => ({ text: TERMS, required_fields: [], as_of_field: null, max_age_s: null, panel: true }),
     getJurors: async () => ({
       jurors: JURORS.map((j) => ({ model_id: j.model, pubkey: toHex(syntheticJurorKey(j.index).publicKey), attestation_sha256: '00'.repeat(32) })),
@@ -43,7 +43,7 @@ function mockChain(opts: { sellerBps?: number; status?: CallView['status']; buye
     }),
     resolve: async (a) => { resolved.push(a); return { txHash: 'tx-resolve', events: [], logs: [], failures: [] }; },
   };
-  const caseReq: CaseRequest = { call_id: 'cheapfacts.test.near/aa', buyer_offer_bps: opts.buyerBps ?? 10000, salt, request_canon: REQ, response_body: RESP };
+  const caseReq: CaseRequest = { call_id: 'shady-api.test.near/aa', buyer_offer_bps: opts.buyerBps ?? 10000, salt, request_canon: REQ, response_body: RESP };
   return { chain, resolved, caseReq };
 }
 

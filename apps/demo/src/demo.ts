@@ -22,9 +22,14 @@ import { DEMO_BOND, DEMO_BUYER_FUNDS, addSeller, deployMarket, type DemoWorld, t
 
 export const ACCOUNTS = {
   contract: PRODUCT_ID, token: 'usdc', owner: 'owner', resolver: 'resolver',
-  sellers: ['chainfacts', 'cheapfacts'] as const, buyers: ['scout', 'scout-liar'] as const,
+  sellers: ['honest-api', 'shady-api'] as const, buyers: ['agent', 'liar-agent'] as const,
   /** Funded buyer left for `make playground` (sandbox only); the scenes never use it. */
-  agent: 'agent',
+  you: 'you',
+};
+/** What each actor does, shown under its name on the page. */
+const ACTOR_ROLES: Record<string, string> = {
+  'honest-api': 'honest seller', 'shady-api': 'sends wrong data',
+  agent: 'buying agent', 'liar-agent': 'lies to get a refund', you: 'your agent',
 };
 /**
  * Scene 5 (sandbox only): the same contract built without the juror-signature check, with
@@ -65,8 +70,8 @@ export interface DemoResult {
   exampleUrls: Record<string, string>;
   /** Restart the sellers scene 4 stopped (same port, same receipt key), e.g. for `make playground`. */
   reviveSellers(): Promise<void>;
-  /** `make playground`: from now on the buyer `agent` (the judge's MCP client) gets a card on the page once it pays. Returns a stop function. */
-  watchAgent(): () => void;
+  /** `make playground`: from now on the buyer `you` (the judge's MCP client) gets a card on the page once it pays. Returns a stop function. */
+  watchYou(): () => void;
   shutdown(opts?: { keepFeed?: boolean }): Promise<void>;
 }
 
@@ -79,16 +84,16 @@ const short = (h: string) => `${h.slice(0, 8)}…`;
 
 /** Local sandbox market: genesis accounts, both contracts, two bonded sellers, two funded buyers. */
 async function sandboxWorld(plan: PanelPlan, terms: Array<{ terms_id: string; text: string; panel: boolean }>): Promise<DemoWorld> {
-  const chain = await LocalChain.start([ACCOUNTS.contract, ACCOUNTS.token, ACCOUNTS.owner, ACCOUNTS.resolver, ...ACCOUNTS.sellers, ...ACCOUNTS.buyers, ACCOUNTS.agent, ...Object.values(UNCHECKED)]);
+  const chain = await LocalChain.start([ACCOUNTS.contract, ACCOUNTS.token, ACCOUNTS.owner, ACCOUNTS.resolver, ...ACCOUNTS.sellers, ...ACCOUNTS.buyers, ACCOUNTS.you, ...Object.values(UNCHECKED)]);
   try {
     const market = await deployMarket({
       chain, contract: ACCOUNTS.contract, token: ACCOUNTS.token, owner: ACCOUNTS.owner, resolver: ACCOUNTS.resolver,
       wasm: 'res/certo.wasm', deployToken: true, jurors: plan.jurors, gatewayKey: plan.gatewayKey, acceptGateway: plan.acceptGateway,
     });
     const regs = await Promise.all([
-      addSeller(market, { id: 'chainfacts', bond: BOND, terms }),
-      addSeller(market, { id: 'cheapfacts', bond: BOND, terms }),
-      ...[...ACCOUNTS.buyers, ACCOUNTS.agent].map((b) => market.mint(b, BUYER_FUNDS)),
+      addSeller(market, { id: 'honest-api', bond: BOND, terms }),
+      addSeller(market, { id: 'shady-api', bond: BOND, terms }),
+      ...[...ACCOUNTS.buyers, ACCOUNTS.you].map((b) => market.mint(b, BUYER_FUNDS)),
     ]);
     const keys = new Map(regs.filter((r): r is Awaited<ReturnType<typeof addSeller>> => !!r).map((r) => [r.id, r.receiptKey]));
     return {
@@ -147,12 +152,12 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
   if (port !== null) print(`page and event feed: http://localhost:${port}`);
   else if (o.port !== null) print(`WARNING: port ${o.port ?? 4020} is in use; the page is not served this run (set DEMO_PORT)`);
   feed.emit({ kind: 'mode', panel: plan.mode, network, ...(plan.recordedAt && plan.mode !== 'live' ? { recordedAt: plan.recordedAt } : {}) });
-  /** Buyers with a card on the page: the scenes' two, then `agent` once it acts in the playground. */
+  /** Buyers with a card on the page: the scenes' two, then `you` once it acts in the playground. */
   const shownBuyers: string[] = [...ACCOUNTS.buyers];
   const emitActors = () => feed.emit({
     kind: 'actors',
-    buyers: shownBuyers.map((id) => ({ id, label: id === ACCOUNTS.agent ? 'agent (you)' : id })),
-    sellers: ACCOUNTS.sellers.map((id) => ({ id, label: id })),
+    buyers: shownBuyers.map((id) => ({ id, label: id, role: ACTOR_ROLES[id] })),
+    sellers: ACCOUNTS.sellers.map((id) => ({ id, label: id, role: ACTOR_ROLES[id] })),
     // pubkey: the key the contract checks this juror's ballots against (committed in fixtures/), for the page's own check
     jurors: JURORS.map((j, i) => ({ index: j.index, model: j.model, name: jurorName(j.family), family: j.family, pubkey: plan.jurors[i]?.pubkey })),
   });
@@ -213,7 +218,7 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
     lastTx.set(`${signer}:${method}`, tx);
     txLog.push({ signer, method, hash: tx.txHash, ...(err ? { error: err.code ?? err.message } : {}) });
     const publish = () => {
-      agentVerdict(tx);
+      yourVerdict(tx);
       for (const e of tx.events) {
         if (e.event === 'call_paid') { const s = labelOf(String(e.data.seller)); paidCalls.set(s, (paidCalls.get(s) ?? 0) + 1); }
         feed.emit({ kind: 'chain', event: e.event, data: e.data, txHash: tx.txHash });
@@ -227,43 +232,43 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
 
   const clientOf = (id: string) => world.client(id, onTx(id));
 
-  // ---- make playground: the judge's buyer `agent` signs in its own process (certo-mcp), so its steps are seen
+  // ---- make playground: the judge's buyer `you` signs in its own process (certo-mcp), so its steps are seen
   // where they land here: the seller that served it, the answer bot, and the resolver's verdict; its balance is polled
   let watching = false;
-  /** The agent's calls this run: seller label and when its dispute was seen. */
-  const agentCalls = new Map<string, { seller: string; disputedAt?: number; gone?: boolean }>();
-  const showAgent = () => {
-    if (shownBuyers.includes(ACCOUNTS.agent)) return;
-    shownBuyers.push(ACCOUNTS.agent);
+  /** The calls of `you` this run: seller label and when its dispute was seen. */
+  const yourCalls = new Map<string, { seller: string; disputedAt?: number; gone?: boolean }>();
+  const showYou = () => {
+    if (shownBuyers.includes(ACCOUNTS.you)) return;
+    shownBuyers.push(ACCOUNTS.you);
     emitActors();
   };
-  const agentPaid = async (seller: string, served: { callId: string; status: number; body: string }) => {
-    if (!watching || agentCalls.has(served.callId)) return;
+  const youPaid = async (seller: string, served: { callId: string; status: number; body: string }) => {
+    if (!watching || yourCalls.has(served.callId)) return;
     const call = await viewer.getCall(served.callId).catch(() => null);
-    if (call?.buyer !== world.id(ACCOUNTS.agent)) return;
-    agentCalls.set(served.callId, { seller });
-    showAgent();
-    await emitCall(0, ACCOUNTS.agent, seller, { status: served.status, body: served.body } as CallResult, served.callId, mismatchOf(served.body));
-    feed.emit({ kind: 'log', actor: ACCOUNTS.agent, text: `paid ${cap(call.price)} to ${seller}: HTTP ${served.status}` });
+    if (call?.buyer !== world.id(ACCOUNTS.you)) return;
+    yourCalls.set(served.callId, { seller });
+    showYou();
+    await emitCall(0, ACCOUNTS.you, seller, { status: served.status, body: served.body } as CallResult, served.callId, mismatchOf(served.body));
+    feed.emit({ kind: 'log', actor: ACCOUNTS.you, text: `paid ${cap(call.price)} to ${seller}: HTTP ${served.status}` });
     await snapshot();
   };
-  const agentAnswered = async (callId: string) => {
-    const a = agentCalls.get(callId);
+  const youAnswered = async (callId: string) => {
+    const a = yourCalls.get(callId);
     if (!watching || !a) return;
     const c = await viewer.getCall(callId).catch(() => null);
     if (!c?.dispute) return;
     a.disputedAt = Date.now();
     feed.emit({
-      kind: 'dispute', scene: 0, callId, buyer: ACCOUNTS.agent, seller: a.seller, disputeKind: 'content', stake: formatUsdc(c.dispute.stake),
+      kind: 'dispute', scene: 0, callId, buyer: ACCOUNTS.you, seller: a.seller, disputeKind: 'content', stake: formatUsdc(c.dispute.stake),
       sellerOfferPct: (c.dispute.seller_offer_bps ?? 0) / 100,
     });
-    feed.emit({ kind: 'log', actor: ACCOUNTS.agent, text: `disputed: stake ${cap(c.dispute.stake)}, ${a.seller} offers ${(c.dispute.seller_offer_bps ?? 0) / 100}%` });
+    feed.emit({ kind: 'log', actor: ACCOUNTS.you, text: `disputed: stake ${cap(c.dispute.stake)}, ${a.seller} offers ${(c.dispute.seller_offer_bps ?? 0) / 100}%` });
   };
-  /** A verdict the resolver submitted on one of the agent's calls: the votes, then the result (before the chain events, as EVENTS.md asks). */
-  function agentVerdict(tx: TxResult): void {
+  /** A verdict the resolver submitted on one of the calls of `you`: the votes, then the result (before the chain events, as EVENTS.md asks). */
+  function yourVerdict(tx: TxResult): void {
     const e = tx.events.find((x) => x.event === 'dispute_resolved');
     const callId = String(e?.data.call_id ?? '');
-    const a = agentCalls.get(callId);
+    const a = yourCalls.get(callId);
     if (!watching || !e || !a) return;
     const votes = (tx.events.find((x) => x.event === 'ballots_verified')?.data.votes ?? []) as string[];
     for (const [i, v] of votes.entries()) feed.emit({ kind: 'vote', scene: 0, callId, juror: i, model: JURORS[i]!.model, vote: v, sigVerified: true });
@@ -274,22 +279,22 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
       kind: 'resolved', scene: 0, callId, tier: e.data.tier, winner, refund: formatUsdc(refund),
       ...(votes.length ? { votes: `${b}-${votes.filter((v) => v === 'seller').length}` } : {}), elapsedMs: Date.now() - (a.disputedAt ?? Date.now()),
     });
-    agentCalls.delete(callId);
+    yourCalls.delete(callId);
   }
-  const watchAgent = () => {
+  const watchYou = () => {
     watching = true;
     let last = '';
     const poll = setInterval(() => {
-      void world.balance(world.id(ACCOUNTS.agent)).then(async (bal) => {
+      void world.balance(world.id(ACCOUNTS.you)).then(async (bal) => {
         const now = formatUsdc(bal);
-        if (last && now !== last && shownBuyers.includes(ACCOUNTS.agent)) await snapshot(); // e.g. a timeout-rule refund the agent sent itself
+        if (last && now !== last && shownBuyers.includes(ACCOUNTS.you)) await snapshot(); // e.g. a timeout-rule refund `you` sent itself
         last = now;
-        for (const [callId, a] of agentCalls) {
+        for (const [callId, a] of yourCalls) {
           if (await viewer.getCall(callId).catch(() => undefined) !== null) continue;
           // gone twice in a row: by then a verdict of the resolver would have been seen (its transaction lands before its report)
           if (!a.gone) { a.gone = true; continue; }
-          agentCalls.delete(callId);
-          feed.emit({ kind: 'log', actor: ACCOUNTS.agent, text: a.disputedAt ? `dispute on ${a.seller} settled without the panel (timeout rule)` : `window closed: ${a.seller} kept the payment` });
+          yourCalls.delete(callId);
+          feed.emit({ kind: 'log', actor: ACCOUNTS.you, text: a.disputedAt ? `dispute on ${a.seller} settled without the panel (timeout rule)` : `window closed: ${a.seller} kept the payment` });
         }
       }).catch(() => undefined);
     }, 2000);
@@ -300,23 +305,23 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
       Promise.all(ACCOUNTS.sellers.map(async (s) => formatUsdc((await viewer.getSeller(world.id(s)))?.bond ?? '0'))),
       Promise.all(ACCOUNTS.buyers.map(async (b) => formatUsdc(await world.balance(world.id(b))))),
     ]);
-    say(`testnet ready: contract ${world.contract}, token ${world.token} (mock USDC, 6 decimals); sellers chainfacts (${world.id('chainfacts')}) and cheapfacts (${world.id('cheapfacts')}) bonded ${bonds.join(' and ')}; buyers scout (${world.id('scout')}) and scout-liar (${world.id('scout-liar')}) hold ${funds.join(' and ')}`);
+    say(`testnet ready: contract ${world.contract}, token ${world.token} (mock USDC, 6 decimals); sellers honest-api (${world.id('honest-api')}) and shady-api (${world.id('shady-api')}) bonded ${bonds.join(' and ')}; buyers agent (${world.id('agent')}) and liar-agent (${world.id('liar-agent')}) hold ${funds.join(' and ')}`);
   } else {
-    say(`sandbox up: contract ${ACCOUNTS.contract}, token ${ACCOUNTS.token} (mock USDC, 6 decimals); sellers chainfacts and cheapfacts bonded ${formatUsdc(BOND)} each; buyers scout and scout-liar hold ${formatUsdc(BUYER_FUNDS)}`);
+    say(`sandbox up: contract ${ACCOUNTS.contract}, token ${ACCOUNTS.token} (mock USDC, 6 decimals); sellers honest-api and shady-api bonded ${formatUsdc(BOND)} each; buyers agent and liar-agent hold ${formatUsdc(BUYER_FUNDS)}`);
   }
 
   // ---- sellers, panel service
   const botLog = (seller: string) => (a: { callId: string; action: string; txHash?: string; error?: string }) => {
     if (a.error) feed.emit({ kind: 'log', actor: seller, text: `${a.action} failed: ${a.error}` });
     else feed.emit({ kind: 'log', actor: seller, text: `${a.action === 'answer' ? 'answered the dispute: offer 0%' : 'cured the claim'} (${short(a.txHash ?? '')})` });
-    if (!a.error && a.action === 'answer') void agentAnswered(a.callId);
+    if (!a.error && a.action === 'answer') void youAnswered(a.callId);
   };
   const sellers: Record<string, DemoSeller> = {};
   const startSeller = async (label: (typeof ACCOUNTS.sellers)[number], port?: number) => {
     const s = await startDemoSeller({
       id: world.id(label), chain: clientOf(label), receiptKey: world.receiptKey(label), termsId: fx.terms.terms_id, price: fx.price,
       responses: { [fx.request]: fx.responses[label] }, offerBps: 0, onBot: botLog(label), botPollMs: testnet ? 4000 : 400, port,
-      onPaid: (served) => void agentPaid(label, served),
+      onPaid: (served) => void youPaid(label, served),
     });
     sellers[label] = s;
     servers.push({ close: () => s.kill() });
@@ -359,8 +364,8 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
     return fetch(input, init);
   };
   const buyer = (id: string) => new CertoClient({ chain: clientOf(id), fetch: buyerFetch });
-  const scout = buyer('scout');
-  const liar = buyer('scout-liar');
+  const agent = buyer('agent');
+  const liar = buyer('liar-agent');
   const urlOf = (s: string) => `${sellers[s]!.url}${fx.request}`;
   const sellerView = async (label: string) => (await viewer.getSeller(world.id(label)))!;
   const bal = (label: string) => world.balance(world.id(label));
@@ -432,46 +437,46 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
     {
       title: 'Honest call: paid in the same transaction',
       run: async () => {
-        const before = await bal('chainfacts');
-        const s0 = await sellerView('chainfacts');
-        say(`scout → chainfacts: GET ${fx.request} (price ${formatUsdc(fx.price)}; 402 quote → pay on chain → retry with proof)`);
-        const r = await scout.call(urlOf('chainfacts'));
-        const payTx = lastTx.get('scout:ft_transfer_call(pay)')!;
-        await emitCall(1, 'scout', 'chainfacts', r, r.callId, mismatchOf(r.body));
-        const after = await bal('chainfacts');
+        const before = await bal('honest-api');
+        const s0 = await sellerView('honest-api');
+        say(`agent → honest-api: GET ${fx.request} (price ${formatUsdc(fx.price)}; 402 quote → pay on chain → retry with proof)`);
+        const r = await agent.call(urlOf('honest-api'));
+        const payTx = lastTx.get('agent:ft_transfer_call(pay)')!;
+        await emitCall(1, 'agent', 'honest-api', r, r.callId, mismatchOf(r.body));
+        const after = await bal('honest-api');
         const fee = BigInt(fx.price) * BigInt(s0.fee_bps) / 10000n;
         const net = BigInt(fx.price) - fee;
-        const inTx = tokenTransfers(payTx).some((t) => t.new_owner_id === world.id('chainfacts') && BigInt(t.amount) === net);
+        const inTx = tokenTransfers(payTx).some((t) => t.new_owner_id === world.id('honest-api') && BigInt(t.amount) === net);
         expect(after - before === net && (testnet || net === 396_000n), `seller received ${formatUsdc(after - before)}, expected ${testnet ? formatUsdc(net) : '0.396000'}`);
         expect(inTx, 'the payout to the seller is not in the paying transaction');
         const decision = simplePolicy(r);
         expect(decision.action === 'accept', `agent did not accept: ${decision.reason}`);
         say(`delivered ${r.body.length} bytes with a seller-signed receipt; agent: ${decision.reason} → accept`);
-        feed.emit({ kind: 'log', actor: 'scout', text: `${decision.reason} → accept` });
+        feed.emit({ kind: 'log', actor: 'agent', text: `${decision.reason} → accept` });
         return {
-          line: `Scene 1 honest call: scout paid chainfacts ${formatUsdc(fx.price)}, fee ${formatUsdc(fee)} (${pct(s0.fee_bps)}), seller balance +${formatUsdc(net)} in the paying transaction ${txRef(r.payTx)}`,
-          caption: `chainfacts got +${cap(net)} in scout's own transaction: nothing held in escrow`,
+          line: `Scene 1 honest call: agent paid honest-api ${formatUsdc(fx.price)}, fee ${formatUsdc(fee)} (${pct(s0.fee_bps)}), seller balance +${formatUsdc(net)} in the paying transaction ${txRef(r.payTx)}`,
+          caption: `honest-api got +${cap(net)} in agent's own transaction: nothing held in escrow`,
         };
       },
     },
     {
       title: 'Asked NEAR, got NEO: content dispute, panel 3–0 for the buyer',
       run: async () => {
-        const s0 = await sellerView('cheapfacts');
-        const b0 = await bal('scout');
-        say(`scout → cheapfacts: GET ${fx.request}`);
-        const r = await scout.call(urlOf('cheapfacts'));
+        const s0 = await sellerView('shady-api');
+        const b0 = await bal('agent');
+        say(`agent → shady-api: GET ${fx.request}`);
+        const r = await agent.call(urlOf('shady-api'));
         const hl = mismatchOf(r.body);
-        await emitCall(2, 'scout', 'cheapfacts', r, r.callId, hl);
+        await emitCall(2, 'agent', 'shady-api', r, r.callId, hl);
         const decision = simplePolicy(r);
         expect(decision.action === 'dispute', `agent did not dispute: ${decision.reason}`);
         const logText = `asked NEAR, got ${hl?.split(':')[1]?.replaceAll('"', '') ?? '?'} → claim a refund`;
         say(`agent: ${logText}`);
-        feed.emit({ kind: 'log', actor: 'scout', text: logText });
-        const { outcome, t } = await contentDispute(2, scout, 'scout', r);
+        feed.emit({ kind: 'log', actor: 'agent', text: logText });
+        const { outcome, t } = await contentDispute(2, agent, 'agent', r);
         const res = outcome.events!.find((e) => e.event === 'dispute_resolved')!.data as { winner: string; refund: string; votes: string[] };
-        const s1 = await sellerView('cheapfacts');
-        const b1 = await bal('scout');
+        const s1 = await sellerView('shady-api');
+        const b1 = await bal('agent');
         expect(res.winner === 'buyer' && res.votes.every((v) => v === 'buyer'), `panel votes ${res.votes.join('/')}`);
         expect(BigInt(res.refund) === 400_000n, `refund ${formatUsdc(res.refund)}`);
         expect(BigInt(s0.bond) === 50_000_000n && BigInt(s1.bond) === 49_580_000n, `bond ${formatUsdc(s0.bond)} → ${formatUsdc(s1.bond)}`);
@@ -481,25 +486,25 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
         feed.emit({ kind: 'resolved', scene: 2, callId: r.callId, tier: 'panel', winner: 'buyer', refund: formatUsdc(res.refund), votes: '3-0', elapsedMs: Date.now() - t });
         return {
           line: `Scene 2 asked NEAR, got NEO: content dispute, votes ${res.votes.join('/')}, 3 signatures verified by contract${synthetic ? ' (synthetic test keys)' : ''}, refund ${formatUsdc(res.refund)}, bond ${formatUsdc(s0.bond)} → ${formatUsdc(s1.bond)}, fee ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)}`,
-          caption: `3–0 for the buyer, 3 signatures checked by the contract: ${cap(res.refund)} back from cheapfacts' bond`,
+          caption: `3–0 for the buyer, 3 signatures checked by the contract: ${cap(res.refund)} back from shady-api' bond`,
         };
       },
     },
     {
       title: 'Lying buyer: panel 0–3, stake forfeited',
       run: async () => {
-        const s0 = await sellerView('chainfacts');
-        const b0 = await bal('scout-liar');
-        say(`scout-liar → chainfacts: GET ${fx.request}`);
-        const r = await liar.call(urlOf('chainfacts'));
-        await emitCall(3, 'scout-liar', 'chainfacts', r, r.callId, mismatchOf(r.body));
+        const s0 = await sellerView('honest-api');
+        const b0 = await bal('liar-agent');
+        say(`liar-agent → honest-api: GET ${fx.request}`);
+        const r = await liar.call(urlOf('honest-api'));
+        await emitCall(3, 'liar-agent', 'honest-api', r, r.callId, mismatchOf(r.body));
         const honest = simplePolicy(r);
-        say(`agent scout-liar: ${honest.reason}, disputes anyway (offer 100%)`);
-        feed.emit({ kind: 'log', actor: 'scout-liar', text: `${honest.reason}; disputes anyway` });
-        const { outcome, stake, t } = await contentDispute(3, liar, 'scout-liar', r);
+        say(`liar-agent: ${honest.reason}, disputes anyway (offer 100%)`);
+        feed.emit({ kind: 'log', actor: 'liar-agent', text: `${honest.reason}; disputes anyway` });
+        const { outcome, stake, t } = await contentDispute(3, liar, 'liar-agent', r);
         const res = outcome.events!.find((e) => e.event === 'dispute_resolved')!.data as { winner: string; refund: string; votes: string[] };
-        const s1 = await sellerView('chainfacts');
-        const b1 = await bal('scout-liar');
+        const s1 = await sellerView('honest-api');
+        const b1 = await bal('liar-agent');
         expect(res.winner === 'seller' && res.votes.every((v) => v === 'seller'), `panel votes ${res.votes.join('/')}`);
         expect(BigInt(res.refund) === 0n, `refund ${formatUsdc(res.refund)}`);
         // on a reused testnet buyer the stake has doubled for each earlier lost dispute (DESIGN 4.5, buyer side)
@@ -507,62 +512,62 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
         expect(s1.bond === s0.bond && s1.fee_bps === s0.fee_bps, `seller bond/fee changed: ${formatUsdc(s0.bond)} → ${formatUsdc(s1.bond)}, ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)}`);
         feed.emit({ kind: 'resolved', scene: 3, callId: r.callId, tier: 'panel', winner: 'seller', refund: formatUsdc(res.refund), votes: '0-3', elapsedMs: Date.now() - t });
         return {
-          line: `Scene 3 lying buyer: scout-liar disputed correct data, votes ${res.votes.join('/')}, buyer stake ${formatUsdc(stake)} forfeited; chainfacts bond ${formatUsdc(s1.bond)} unchanged, fee stays ${pct(s1.fee_bps)}`,
-          caption: `0–3 for the seller: scout-liar loses its ${cap(stake)} stake; chainfacts keeps bond and fee`,
+          line: `Scene 3 lying buyer: liar-agent disputed correct data, votes ${res.votes.join('/')}, buyer stake ${formatUsdc(stake)} forfeited; honest-api bond ${formatUsdc(s1.bond)} unchanged, fee stays ${pct(s1.fee_bps)}`,
+          caption: `0–3 for the seller: liar-agent loses its ${cap(stake)} stake; honest-api keeps bond and fee`,
         };
       },
     },
     {
       title: 'Seller dead: non-delivery refunded by rule',
       run: async () => {
-        const s0 = await sellerView('cheapfacts');
-        const b0 = await bal('scout');
+        const s0 = await sellerView('shady-api');
+        const b0 = await bal('agent');
         const answerMs = (await viewer.getConfig()).answer_ms;
-        say(`scout → cheapfacts: GET ${fx.request}`);
-        killBeforeDelivery = sellers.cheapfacts!;
+        say(`agent → shady-api: GET ${fx.request}`);
+        killBeforeDelivery = sellers['shady-api']!;
         let callId: string;
         try {
-          await scout.call(urlOf('cheapfacts'));
+          await agent.call(urlOf('shady-api'));
           throw new SceneFailure('the dead seller delivered');
         } catch (e) {
           if (!(e instanceof CertoError) || !e.callId) throw e;
           callId = e.callId;
           say(`paid, no delivery (${e.code}) → claim non-delivery`);
-          feed.emit({ kind: 'log', actor: 'scout', text: 'paid, nothing delivered → claim non-delivery' });
+          feed.emit({ kind: 'log', actor: 'agent', text: 'paid, nothing delivered → claim non-delivery' });
         }
-        await emitCall(4, 'scout', 'cheapfacts', null, callId);
+        await emitCall(4, 'agent', 'shady-api', null, callId);
         const t = Date.now();
-        const claim = await scout.claimNonDelivery(callId);
+        const claim = await agent.claimNonDelivery(callId);
         const opened = claim.events.find((e) => e.event === 'dispute_opened')!.data as { stake: string; answer_by_ms?: number };
         const call = await viewer.getCall(callId);
         const answerBy = opened.answer_by_ms ?? (call!.dispute!.opened_at_ms + answerMs);
         say(`non-delivery claim open: stake ${formatUsdc(opened.stake)}; seller has ${answerMs / 1000} s to cure`);
-        feed.emit({ kind: 'dispute', scene: 4, callId, buyer: 'scout', seller: 'cheapfacts', disputeKind: 'non_delivery', stake: formatUsdc(opened.stake), answerByMs: answerBy, answerMs });
+        feed.emit({ kind: 'dispute', scene: 4, callId, buyer: 'agent', seller: 'shady-api', disputeKind: 'non_delivery', stake: formatUsdc(opened.stake), answerByMs: answerBy, answerMs });
         let tx: TxResult | undefined;
         for (let i = 0; !tx; i++) {
           const left = Math.max(0, Math.ceil((answerBy - (await world.nowMs())) / 1000));
           feed.emit({ kind: 'log', actor: 'contract', text: left > 0 ? `seller silent, ${left} s left` : 'seller silent, time is up' });
           if (left > 0) { await new Promise((r) => setTimeout(r, Math.min(1000, left * 1000))); continue; }
           try {
-            tx = await scout.resolveDefault(callId);
+            tx = await agent.resolveDefault(callId);
           } catch (e) {
             if ((e as ContractError).code !== 'E_TOO_EARLY' || i > 40) throw e;
             await new Promise((r) => setTimeout(r, 300));
           }
         }
         const res = tx.events.find((e) => e.event === 'dispute_resolved')!.data as { tier: string; reason: string; refund: string };
-        const s1 = await sellerView('cheapfacts');
-        const b1 = await bal('scout');
+        const s1 = await sellerView('shady-api');
+        const b1 = await bal('agent');
         expect(res.tier === 'rule' && res.reason === 'seller_no_answer', `resolved as ${res.tier}/${res.reason}`);
         expect(BigInt(res.refund) === 400_000n, `refund ${formatUsdc(res.refund)}`);
         expect(BigInt(s0.bond) === 49_580_000n && BigInt(s1.bond) === 49_160_000n, `bond ${formatUsdc(s0.bond)} → ${formatUsdc(s1.bond)}`);
         expect(b1 === b0, `buyer balance ${formatUsdc(b0)} → ${formatUsdc(b1)} (expected unchanged)`);
         feed.emit({ kind: 'resolved', scene: 4, callId, tier: 'rule', winner: 'buyer', refund: formatUsdc(res.refund), elapsedMs: Date.now() - t });
-        say(`resolve_default by scout: refund ${formatUsdc(res.refund)} + stake back; seller pays the ruling fee (tx ${txRef(tx.txHash)})`);
+        say(`resolve_default by agent: refund ${formatUsdc(res.refund)} + stake back; seller pays the ruling fee (tx ${txRef(tx.txHash)})`);
         expect((testnet || s0.fee_bps === 150) && s1.fee_bps === feeAfterLoss(s0.fee_bps), `fee ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)}`);
         return {
           line: `Scene 4 seller dead: seller did not answer in ${answerMs / 1000} s (${testnet ? 'testnet setting' : 'demo setting; 30 s on testnet'}), refund ${formatUsdc(res.refund)} by rule, no panel, bond ${formatUsdc(s0.bond)} → ${formatUsdc(s1.bond)}, fee ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)} (${testnet ? 'loss recorded' : 'second loss'})`,
-          caption: `cheapfacts silent ${answerMs / 1000} s: ${cap(res.refund)} refunded by rule, no panel; fee ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)}`,
+          caption: `shady-api silent ${answerMs / 1000} s: ${cap(res.refund)} refunded by rule, no panel; fee ${pct(s0.fee_bps)} → ${pct(s1.fee_bps)}`,
         };
       },
     },
@@ -589,11 +594,11 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
         weakReady.catch(() => undefined);
         const forging = new ForgingJurors(jurors, FORGED_JUROR);
         const juror = JURORS[FORGED_JUROR]!;
-        say(`scout-liar → chainfacts: GET ${fx.request}, then a content dispute on the correct answer`);
-        const r = await liar.call(urlOf('chainfacts'));
-        await emitCall(5, 'scout-liar', 'chainfacts', r, r.callId);
+        say(`liar-agent → honest-api: GET ${fx.request}, then a content dispute on the correct answer`);
+        const r = await liar.call(urlOf('honest-api'));
+        await emitCall(5, 'liar-agent', 'honest-api', r, r.callId);
         const d = await liar.dispute(r, { offerBps: 10_000 });
-        const base = { kind: 'dispute', scene: 5, callId: r.callId, buyer: 'scout-liar', seller: 'chainfacts', disputeKind: 'content', stake: formatUsdc(d.stake) };
+        const base = { kind: 'dispute', scene: 5, callId: r.callId, buyer: 'liar-agent', seller: 'honest-api', disputeKind: 'content', stake: formatUsdc(d.stake) };
         feed.emit(base);
         await liar.waitForStatus(r.callId, ['Answered'], { timeoutMs: 20_000, pollMs: 300 });
         feed.emit({ ...base, sellerOfferPct: 0, buyerOfferPct: d.offerBps / 100 });
@@ -667,5 +672,5 @@ export async function runDemo(o: DemoOptions = {}): Promise<DemoResult> {
   lines.push(summary);
   print(summary);
   const exampleUrls = Object.fromEntries(ACCOUNTS.sellers.map((s) => [s, urlOf(s)]));
-  return { ok, scenesOk, jurorsVerified: verifiedJurors.size, plan, lines, feed, port, elapsedMs: Date.now() - t0, world, panelUrl, exampleUrls, reviveSellers, watchAgent, shutdown };
+  return { ok, scenesOk, jurorsVerified: verifiedJurors.size, plan, lines, feed, port, elapsedMs: Date.now() - t0, world, panelUrl, exampleUrls, reviveSellers, watchYou, shutdown };
 }

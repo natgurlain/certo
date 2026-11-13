@@ -12,9 +12,9 @@ import {
   runCli, simplePolicy, withPlayground, type CallResult,
 } from '../src/index.js';
 
-const SELLER = 'cheapfacts.test.near';
-const BUYER = 'scout.test.near';
-const key = ed25519FromLabel('cheapfacts-receipt');
+const SELLER = 'shady-api.test.near';
+const BUYER = 'agent.test.near';
+const key = ed25519FromLabel('shady-api-receipt');
 const chain = new FakeChain();
 chain.addSeller(SELLER, toHex(key.publicKey));
 chain.addTermsFor(SELLER, 'holders-v1', 'terms');
@@ -441,10 +441,10 @@ describe('configuration', () => {
     const home = mkdtempSync(join(tmpdir(), 'certo-home-'));
     expect(() => withPlayground({ CERTO_HOME: home })).toThrow(new ConfigError(NO_PLAYGROUND));
     expect(NO_PLAYGROUND).toBe('no playground running: start one with `make playground` in the certo repo');
-    writeFileSync(join(home, 'playground.env'), '# written by make playground\nNEAR_NETWORK=sandbox\nCERTO_CONTRACT=certo.test\nBUYER_ACCOUNT="scout"\nCERTO_EXAMPLE_URLS=cheapfacts=http://127.0.0.1:1/v1/holders?token=NEAR,chainfacts=http://127.0.0.1:2/x\n');
+    writeFileSync(join(home, 'playground.env'), '# written by make playground\nNEAR_NETWORK=sandbox\nCERTO_CONTRACT=certo.test\nBUYER_ACCOUNT="agent"\nCERTO_EXAMPLE_URLS=shady-api=http://127.0.0.1:1/v1/holders?token=NEAR,honest-api=http://127.0.0.1:2/x\n');
     const env = withPlayground({ CERTO_HOME: home, BUYER_ACCOUNT: 'mine' });
     expect(env).toMatchObject({ NEAR_NETWORK: 'sandbox', CERTO_CONTRACT: 'certo.test', BUYER_ACCOUNT: 'mine' });
-    expect(exampleUrls(env)).toEqual([{ name: 'cheapfacts', url: 'http://127.0.0.1:1/v1/holders?token=NEAR' }, { name: 'chainfacts', url: 'http://127.0.0.1:2/x' }]);
+    expect(exampleUrls(env)).toEqual([{ name: 'shady-api', url: 'http://127.0.0.1:1/v1/holders?token=NEAR' }, { name: 'honest-api', url: 'http://127.0.0.1:2/x' }]);
   });
 
   it('missing env names what to set', () => {

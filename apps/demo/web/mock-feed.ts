@@ -54,10 +54,10 @@ const raw = (x: number) => String(Math.round(x * 1e6));
 const chain = (event: string, data: Record<string, unknown>) => send({ kind: "chain", event, data, txHash: txHash() });
 
 // Mutable mock ledger, mirrored into `state` snapshots.
-const buyers: Record<string, number> = { scout: 10, "scout-liar": 10 };
+const buyers: Record<string, number> = { agent: 10, "liar-agent": 10 };
 const sellers: Record<string, { balance: number; bond: number; exposed: number; feeBps: number; calls: number; losses: number }> = {
-  chainfacts: { balance: 0, bond: 50, exposed: 0, feeBps: 100, calls: 0, losses: 0 },
-  cheapfacts: { balance: 0, bond: 50, exposed: 0, feeBps: 100, calls: 0, losses: 0 },
+  'honest-api': { balance: 0, bond: 50, exposed: 0, feeBps: 100, calls: 0, losses: 0 },
+  'shady-api': { balance: 0, bond: 50, exposed: 0, feeBps: 100, calls: 0, losses: 0 },
 };
 function state(): void {
   send({
@@ -146,8 +146,8 @@ async function script(): Promise<void> {
   send({ kind: "mode", panel: MODE, network: "sandbox", ...(MODE === "replay" ? { recordedAt: Date.parse("2026-11-12T15:40:00Z") } : {}) });
   send({
     kind: "actors",
-    buyers: [{ id: "scout", label: "scout" }, { id: "scout-liar", label: "scout-liar" }],
-    sellers: [{ id: "chainfacts", label: "chainfacts" }, { id: "cheapfacts", label: "cheapfacts" }],
+    buyers: [{ id: "agent", label: "agent", role: "buying agent" }, { id: "liar-agent", label: "liar-agent", role: "lies to get a refund" }],
+    sellers: [{ id: "honest-api", label: "honest-api", role: "honest seller" }, { id: "shady-api", label: "shady-api", role: "sends wrong data" }],
     jurors: [
       { index: 0, model: "Qwen/Qwen3.8-27B", name: "Qwen", family: "Alibaba Qwen" },
       { index: 1, model: "z-ai/glm-5.3-flash", name: "GLM", family: "Zhipu GLM" },
@@ -160,75 +160,75 @@ async function script(): Promise<void> {
 
   // Scene 1: honest seller, instant pay.
   send({ kind: "scene", n: 1, title: "Honest seller: paid in the same transaction", status: "start" });
-  send({ kind: "log", actor: "scout", text: `${REQUEST} → 402, price 0.40` });
+  send({ kind: "log", actor: "agent", text: `${REQUEST} → 402, price 0.40` });
   await sleep(1500);
-  const c1 = await pay("scout", "chainfacts");
-  send({ kind: "call", scene: 1, buyer: "scout", seller: "chainfacts", request: REQUEST, price: amt(PRICE), callId: c1, status: 200, responsePreview: GOOD, windowMs: 120_000 });
-  send({ kind: "log", actor: "scout", text: "receipt verified; token NEAR as requested" });
+  const c1 = await pay("agent", "honest-api");
+  send({ kind: "call", scene: 1, buyer: "agent", seller: "honest-api", request: REQUEST, price: amt(PRICE), callId: c1, status: 200, responsePreview: GOOD, windowMs: 120_000 });
+  send({ kind: "log", actor: "agent", text: "receipt verified; token NEAR as requested" });
   await sleep(3500);
-  send({ kind: "scene", n: 1, title: "Honest seller: paid in the same transaction", status: "ok", line: "Scene 1 OK: seller balance +0.396000 in the paying transaction", caption: "chainfacts got +0.396 in scout's own transaction: nothing held in escrow" });
+  send({ kind: "scene", n: 1, title: "Honest seller: paid in the same transaction", status: "ok", line: "Scene 1 OK: seller balance +0.396000 in the paying transaction", caption: "honest-api got +0.396 in agent's own transaction: nothing held in escrow" });
   if (STOP_AFTER <= 1) return;
   await sleep(2000);
 
   // Scene 2: wrong token, panel 3-0.
   send({ kind: "scene", n: 2, title: "Wrong token: the panel decides", status: "start" });
-  send({ kind: "log", actor: "scout", text: `${REQUEST} → cheapfacts, price 0.40` });
+  send({ kind: "log", actor: "agent", text: `${REQUEST} → shady-api, price 0.40` });
   await sleep(1500);
-  const c2 = await pay("scout", "cheapfacts");
-  send({ kind: "call", scene: 2, buyer: "scout", seller: "cheapfacts", request: REQUEST, price: amt(PRICE), callId: c2, status: 200, responsePreview: WRONG, highlight: '"token":"NEO"' });
+  const c2 = await pay("agent", "shady-api");
+  send({ kind: "call", scene: 2, buyer: "agent", seller: "shady-api", request: REQUEST, price: amt(PRICE), callId: c2, status: 200, responsePreview: WRONG, highlight: '"token":"NEO"' });
   await sleep(1800);
-  send({ kind: "log", actor: "scout", text: "asked NEAR, got NEO → claim a refund" });
+  send({ kind: "log", actor: "agent", text: "asked NEAR, got NEO → claim a refund" });
   await sleep(1200);
-  await panelDispute(2, "scout", "cheapfacts", c2, "buyer");
-  send({ kind: "log", actor: "scout", text: "refund 0.40 received, stake 0.02 returned" });
+  await panelDispute(2, "agent", "shady-api", c2, "buyer");
+  send({ kind: "log", actor: "agent", text: "refund 0.40 received, stake 0.02 returned" });
   await sleep(4000);
-  send({ kind: "scene", n: 2, title: "Wrong token: the panel decides", status: "ok", line: "Scene 2 OK: votes buyer/buyer/buyer, 3 signatures verified by contract, refund 0.400000, bond 50.000000 → 49.580000, fee 1.0% → 1.5%", caption: "3–0 for the buyer, 3 signatures checked by the contract: 0.40 back from cheapfacts' bond" });
+  send({ kind: "scene", n: 2, title: "Wrong token: the panel decides", status: "ok", line: "Scene 2 OK: votes buyer/buyer/buyer, 3 signatures verified by contract, refund 0.400000, bond 50.000000 → 49.580000, fee 1.0% → 1.5%", caption: "3–0 for the buyer, 3 signatures checked by the contract: 0.40 back from shady-api' bond" });
   if (STOP_AFTER <= 2) return;
   await sleep(2000);
 
   // Scene 3: lying buyer loses 0-3.
   send({ kind: "scene", n: 3, title: "Lying buyer: loses and pays the ruling fee", status: "start" });
-  send({ kind: "log", actor: "scout-liar", text: `${REQUEST} → chainfacts, price 0.40` });
+  send({ kind: "log", actor: "liar-agent", text: `${REQUEST} → honest-api, price 0.40` });
   await sleep(1500);
-  const c3 = await pay("scout-liar", "chainfacts");
-  send({ kind: "call", scene: 3, buyer: "scout-liar", seller: "chainfacts", request: REQUEST, price: amt(PRICE), callId: c3, status: 200, responsePreview: GOOD });
+  const c3 = await pay("liar-agent", "honest-api");
+  send({ kind: "call", scene: 3, buyer: "liar-agent", seller: "honest-api", request: REQUEST, price: amt(PRICE), callId: c3, status: 200, responsePreview: GOOD });
   await sleep(1500);
-  send({ kind: "log", actor: "scout-liar", text: "data is correct; disputes anyway at 100%" });
+  send({ kind: "log", actor: "liar-agent", text: "data is correct; disputes anyway at 100%" });
   await sleep(1000);
-  await panelDispute(3, "scout-liar", "chainfacts", c3, "seller");
-  send({ kind: "log", actor: "scout-liar", text: "lost 0-3; stake 0.02 forfeited" });
+  await panelDispute(3, "liar-agent", "honest-api", c3, "seller");
+  send({ kind: "log", actor: "liar-agent", text: "lost 0-3; stake 0.02 forfeited" });
   await sleep(4000);
-  send({ kind: "scene", n: 3, title: "Lying buyer: loses and pays the ruling fee", status: "ok", line: "Scene 3 OK: votes seller/seller/seller, buyer stake 0.020000 forfeited", caption: "0–3 for the seller: scout-liar loses its 0.02 stake; chainfacts keeps bond and fee" });
+  send({ kind: "scene", n: 3, title: "Lying buyer: loses and pays the ruling fee", status: "ok", line: "Scene 3 OK: votes seller/seller/seller, buyer stake 0.020000 forfeited", caption: "0–3 for the seller: liar-agent loses its 0.02 stake; honest-api keeps bond and fee" });
   if (STOP_AFTER <= 3) return;
   await sleep(2000);
 
   // Scene 4: seller down, refund by rule.
   send({ kind: "scene", n: 4, title: "Seller down: refund by rule, no panel", status: "start" });
-  send({ kind: "log", actor: "cheapfacts", text: "process killed" });
-  send({ kind: "log", actor: "scout", text: `${REQUEST} → cheapfacts, price 0.40` });
+  send({ kind: "log", actor: "shady-api", text: "process killed" });
+  send({ kind: "log", actor: "agent", text: `${REQUEST} → shady-api, price 0.40` });
   await sleep(1500);
-  const c4 = await pay("scout", "cheapfacts");
-  send({ kind: "call", scene: 4, buyer: "scout", seller: "cheapfacts", request: REQUEST, price: amt(PRICE), callId: c4, status: null, responsePreview: "" });
+  const c4 = await pay("agent", "shady-api");
+  send({ kind: "call", scene: 4, buyer: "agent", seller: "shady-api", request: REQUEST, price: amt(PRICE), callId: c4, status: null, responsePreview: "" });
   await sleep(2500);
-  send({ kind: "log", actor: "scout", text: "no response → claim non-delivery" });
+  send({ kind: "log", actor: "agent", text: "no response → claim non-delivery" });
   const opened = Date.now();
-  buyers.scout -= STAKE;
+  buyers.agent -= STAKE;
   chain("dispute_opened", { call_id: c4, kind: "non_delivery", stake: raw(STAKE), answer_by_ms: opened + 5000 });
   state();
-  send({ kind: "dispute", scene: 4, callId: c4, buyer: "scout", seller: "cheapfacts", stake: amt(STAKE), answerByMs: opened + 5000, answerMs: 5000, ...disputeKind("non_delivery") });
+  send({ kind: "dispute", scene: 4, callId: c4, buyer: "agent", seller: "shady-api", stake: amt(STAKE), answerByMs: opened + 5000, answerMs: 5000, ...disputeKind("non_delivery") });
   await new Promise((r) => setTimeout(r, Math.max(0, opened + 5300 - Date.now())));
-  const s = sellers.cheapfacts;
-  buyers.scout += PRICE + STAKE;
+  const s = sellers['shady-api'];
+  buyers.agent += PRICE + STAKE;
   s.bond -= PRICE + STAKE;
   s.exposed -= PRICE + STAKE;
   s.losses += 1;
   chain("dispute_resolved", { call_id: c4, tier: "rule", reason: "seller_no_answer", refund: raw(PRICE), ruling_fee: raw(STAKE) });
-  stepFee("cheapfacts");
+  stepFee("shady-api");
   state();
   send({ kind: "resolved", scene: 4, callId: c4, tier: "rule", winner: "buyer", refund: amt(PRICE), elapsedMs: Date.now() - opened });
-  send({ kind: "log", actor: "scout", text: "refund 0.40 by rule, stake 0.02 returned" });
+  send({ kind: "log", actor: "agent", text: "refund 0.40 by rule, stake 0.02 returned" });
   await sleep(3000);
-  send({ kind: "scene", n: 4, title: "Seller down: refund by rule, no panel", status: "ok", line: "Scene 4 OK: seller did not answer in 5 s (demo setting; 30 s on testnet), refund 0.400000 by rule, no panel", caption: "cheapfacts silent 5 s: 0.40 refunded by rule, no panel; fee 1.5% → 2.5%" });
+  send({ kind: "scene", n: 4, title: "Seller down: refund by rule, no panel", status: "ok", line: "Scene 4 OK: seller did not answer in 5 s (demo setting; 30 s on testnet), refund 0.400000 by rule, no panel", caption: "shady-api silent 5 s: 0.40 refunded by rule, no panel; fee 1.5% → 2.5%" });
   if (STOP_AFTER <= 4) return;
   await sleep(2000);
 
@@ -236,10 +236,10 @@ async function script(): Promise<void> {
   const t5 = "We attack our own contract: one byte of a juror's signed answer changed";
   send({ kind: "scene", n: 5, title: t5, status: "start" });
   await sleep(1500);
-  const c5 = await pay("scout-liar", "chainfacts");
-  send({ kind: "call", scene: 5, buyer: "scout-liar", seller: "chainfacts", request: REQUEST, price: amt(PRICE), callId: c5, status: 200, responsePreview: GOOD });
+  const c5 = await pay("liar-agent", "honest-api");
+  send({ kind: "call", scene: 5, buyer: "liar-agent", seller: "honest-api", request: REQUEST, price: amt(PRICE), callId: c5, status: 200, responsePreview: GOOD });
   await sleep(1500);
-  send({ kind: "dispute", scene: 5, callId: c5, buyer: "scout-liar", seller: "chainfacts", buyerOfferPct: 100, sellerOfferPct: 0, stake: amt(STAKE), ...disputeKind("content") });
+  send({ kind: "dispute", scene: 5, callId: c5, buyer: "liar-agent", seller: "honest-api", buyerOfferPct: 100, sellerOfferPct: 0, stake: amt(STAKE), ...disputeKind("content") });
   await sleep(2000);
   const forged = { kind: "attack", scene: 5, callId: c5, juror: 0, from: "Y", to: "X", votes: ["buyer", "seller", "seller"] };
   chain("tx_failed", { method: "resolve", signer: "resolver", error: "E_BALLOT_SIG" });

@@ -10,7 +10,7 @@ import {
 } from '@certo/core';
 import { repoFile } from './sandbox.js';
 
-export type DemoSeller = 'chainfacts' | 'cheapfacts';
+export type DemoSeller = 'honest-api' | 'shady-api';
 
 export interface DemoFixtures {
   terms: { terms_id: string; text: string; panel: boolean };
@@ -46,14 +46,14 @@ export function demoCases(d: DemoFixtures = loadDemo()): DemoCase[] {
   const canon = `GET\n${d.request}\n`;
   return [
     {
-      id: 'demo-scene2', scene: 2, seller: 'cheapfacts', terms_text: d.terms.text, request_canon: canon,
-      response_body: d.responses.cheapfacts, buyer_offer_pct: 100, seller_offer_pct: 0, label: 'buyer',
-      note: 'Scene 2: asked NEAR, cheapfacts answered about NEO.',
+      id: 'demo-scene2', scene: 2, seller: 'shady-api', terms_text: d.terms.text, request_canon: canon,
+      response_body: d.responses['shady-api'], buyer_offer_pct: 100, seller_offer_pct: 0, label: 'buyer',
+      note: 'Scene 2: asked NEAR, shady-api answered about NEO.',
     },
     {
-      id: 'demo-scene3', scene: 3, seller: 'chainfacts', terms_text: d.terms.text, request_canon: canon,
-      response_body: d.responses.chainfacts, buyer_offer_pct: 100, seller_offer_pct: 0, label: 'seller',
-      note: 'Scene 3: scout-liar disputes correct NEAR data from chainfacts.',
+      id: 'demo-scene3', scene: 3, seller: 'honest-api', terms_text: d.terms.text, request_canon: canon,
+      response_body: d.responses['honest-api'], buyer_offer_pct: 100, seller_offer_pct: 0, label: 'seller',
+      note: 'Scene 3: liar-agent disputes correct NEAR data from honest-api.',
     },
   ];
 }

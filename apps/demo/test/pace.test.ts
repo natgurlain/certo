@@ -29,15 +29,15 @@ describe('page pacing (apps/demo/web/pace.js)', () => {
     expect(countdownMs({ kind: 'dispute', disputeKind: 'non_delivery', answerByMs: 15_000, t: 10_000 })).toBe(5000);
     expect(countdownMs({ kind: 'dispute', disputeKind: 'content', answerByMs: 15_000, t: 10_000 })).toBeNull();
     expect(dwellMs({ kind: 'dispute', disputeKind: 'non_delivery', answerMs: 5000 })).toBeGreaterThanOrEqual(5000);
-    const buyers = new Set(['scout']);
+    const buyers = new Set(['agent']);
     expect(dwellMs({ kind: 'log', actor: 'contract', text: 'seller silent, 3 s left' }, { buyers })).toBe(0);
-    expect(dwellMs({ kind: 'log', actor: 'scout', text: 'asked NEAR, got NEO → claim a refund' }, { buyers })).toBeGreaterThan(0);
+    expect(dwellMs({ kind: 'log', actor: 'agent', text: 'asked NEAR, got NEO → claim a refund' }, { buyers })).toBeGreaterThan(0);
   });
 
   it('paces a recorded scene 2 to at least 10 s', () => {
     const scene2: Msg[] = [
       { kind: 'scene', n: 2, status: 'start' }, { kind: 'chain', event: 'call_paid' }, { kind: 'state' }, { kind: 'call' },
-      { kind: 'log', actor: 'scout' }, { kind: 'dispute', disputeKind: 'content' }, { kind: 'dispute', disputeKind: 'content' },
+      { kind: 'log', actor: 'agent' }, { kind: 'dispute', disputeKind: 'content' }, { kind: 'dispute', disputeKind: 'content' },
       { kind: 'vote' }, { kind: 'vote' }, { kind: 'vote' }, { kind: 'chain', event: 'dispute_resolved' }, { kind: 'resolved' },
       { kind: 'scene', n: 2, status: 'ok' },
     ];

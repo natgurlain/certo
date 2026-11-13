@@ -38,8 +38,8 @@ export const DEMO_BUYER_FUNDS = '10000000';
 /**
  * What the demo runner needs from a chain, so the same four scenes run on the
  * local sandbox and on testnet. Actors are named by their demo label
- * (`scout`, `chainfacts`, `resolver`, …); `id(label)` is the account id
- * (the label itself on the sandbox, e.g. `scout.certo.testnet` on testnet).
+ * (`agent`, `honest-api`, `resolver`, …); `id(label)` is the account id
+ * (the label itself on the sandbox, e.g. `agent.certo.testnet` on testnet).
  */
 export interface DemoWorld {
   network: 'sandbox' | 'testnet';

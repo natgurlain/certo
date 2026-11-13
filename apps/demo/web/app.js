@@ -307,7 +307,7 @@ function buildActors() {
   $("buyers").innerHTML = S.actors.buyers.map((b) => `
     <div class="card buyer" data-buyer="${esc(b.id)}">
       <div class="buyer-top">
-        <div class="card-head"><span class="name">${esc(b.label ?? b.id)}</span><span class="role">buyer agent</span></div>
+        <div class="card-head"><span class="name">${esc(b.label ?? b.id)}</span><span class="role">${esc(b.role ?? "buyer agent")}</span></div>
         <div class="bal"><span class="big v">—</span><span class="unit">USDC</span></div>
       </div>
       <div class="note"></div>
@@ -315,7 +315,7 @@ function buildActors() {
     </div>`).join("");
   $("sellers").innerHTML = S.actors.sellers.map((s) => `
     <div class="card seller" data-seller="${esc(s.id)}">
-      <div class="card-head"><span class="name">${esc(s.label ?? s.id)}</span><span class="role">seller API</span><span class="down"></span><span class="spacer"></span>
+      <div class="card-head"><span class="name">${esc(s.label ?? s.id)}</span><span class="role">${esc(s.role ?? "seller API")}</span><span class="down"></span><span class="spacer"></span>
         <span class="fee-was"></span><span class="fee">fee —</span></div>
       <div class="seller-nums">
         <div class="bal-cell"><label>Balance</label><div class="big v-bal">—</div><div class="was"></div></div>

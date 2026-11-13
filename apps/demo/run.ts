@@ -12,7 +12,7 @@
 // The feed is saved as feed.json ($CERTO_HOME/demo/feed.json, default ~/.certo; --feed-out
 // to choose), which the page plays when served as static files (apps/demo/web/ + feed.json).
 // --keep-open (alias --playground) keeps the page, the feed, the sellers, the panel and, on the
-// sandbox, the chain up after the run with a funded buyer `agent`, and writes
+// sandbox, the chain up after the run with a funded buyer `you`, and writes
 // $CERTO_HOME/playground.env for `certo-mcp --playground` (deleted on exit). Ctrl-C stops it.
 // On testnet, accounts and keys come from .env; the market is deployed or topped up
 // first (idempotent, as scripts/deploy-testnet.ts); --dry-run only checks the
@@ -56,7 +56,7 @@ const demoPort = Number(process.env.DEMO_PORT ?? 4020);
 const r = await runDemo({
   port: demoPort, network, testnet, env,
   // fixed seller ports in the playground, so the example prompts stay the same between runs
-  ...(keepOpen ? { sellerPorts: { chainfacts: demoPort + 10, cheapfacts: demoPort + 11 } } : {}),
+  ...(keepOpen ? { sellerPorts: { 'honest-api': demoPort + 10, 'shady-api': demoPort + 11 } } : {}),
 }).catch((e: Error) => {
   console.error(`DEMO FAILED: ${e.message}`);
   process.exit(1);
@@ -74,13 +74,13 @@ if (!keepOpen) {
   process.exit(r.ok ? 0 : 1);
 }
 await r.reviveSellers();
-r.watchAgent();
+r.watchYou();
 const pageUrl = r.port !== null ? `http://localhost:${r.port}` : null;
 if (r.world.local) {
   const chain = r.world.local.chain;
   const envPath = writePlaygroundEnv({
     rpcUrl: chain.rpcUrl, contract: r.world.contract, token: r.world.token,
-    buyer: ACCOUNTS.agent, buyerPrivateKey: chain.key(ACCOUNTS.agent).privateKey, panelUrl: r.panelUrl, exampleUrls: r.exampleUrls,
+    buyer: ACCOUNTS.you, buyerPrivateKey: chain.key(ACCOUNTS.you).privateKey, panelUrl: r.panelUrl, exampleUrls: r.exampleUrls,
   });
   for (const l of playgroundBanner({ pageUrl, envPath, exampleUrls: r.exampleUrls })) console.log(l);
 } else {

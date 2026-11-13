@@ -8,8 +8,8 @@ import {
 import { FakeChain } from '@certo/core/testing';
 import { createAnswerBot, MAX_SIGNED_BODY, protect, SCHEME_HINT } from '../src/index.js';
 
-const SELLER = 'chainfacts.test.near';
-const BUYER = 'scout.test.near';
+const SELLER = 'honest-api.test.near';
+const BUYER = 'agent.test.near';
 const key = ed25519FromLabel('seller-receipt-key');
 const chain = new FakeChain();
 chain.addSeller(SELLER, toHex(key.publicKey));

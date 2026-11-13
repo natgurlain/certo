@@ -15,7 +15,7 @@ import { protect } from '@certo/seller';
 import { CertoClient, FileCallStore } from '@certo/buyer';
 import { createMcpServer, TOOL_CALL, TOOL_DISPUTE, TOOL_QUOTE, TOOL_STATUS } from '../src/index.js';
 
-const SELLER = 'cheapfacts.test.near';
+const SELLER = 'shady-api.test.near';
 const key = ed25519FromLabel('mcp-seller');
 const chain = new FakeChain();
 chain.addSeller(SELLER, toHex(key.publicKey));
@@ -32,8 +32,8 @@ const BIN = fileURLToPath(new URL('../bin/certo-mcp.js', import.meta.url));
 
 async function connect(o: { panelUrl?: string; chain?: CertoClient['chain'] } = {}): Promise<Client> {
   const mcp = createMcpServer({
-    client: new CertoClient({ chain: o.chain ?? chain.as('scout.test.near'), store: new FileCallStore(stateDir) }),
-    examples: [{ name: 'cheapfacts', url: `${base}/v1/holders?token=NEAR` }], panelUrl: o.panelUrl,
+    client: new CertoClient({ chain: o.chain ?? chain.as('agent.test.near'), store: new FileCallStore(stateDir) }),
+    examples: [{ name: 'shady-api', url: `${base}/v1/holders?token=NEAR` }], panelUrl: o.panelUrl,
   });
   const [a, b] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'test', version: '0' });
@@ -64,7 +64,7 @@ describe('MCP server', () => {
     expect(d.inputSchema.properties).toHaveProperty('kind.enum', ['content', 'error', 'rule', 'non_delivery']);
     expect(d.inputSchema.properties).toHaveProperty('submit_to_panel.default', false);
     expect(tools.find((t) => t.name === TOOL_CALL)!.description).toMatch(/PRICE_TOO_HIGH.*nothing paid|nothing paid.*PRICE_TOO_HIGH/);
-    expect(client.getInstructions()).toMatch(new RegExp(`cheapfacts = ${base}/v1/holders\\?token=NEAR`));
+    expect(client.getInstructions()).toMatch(new RegExp(`shady-api = ${base}/v1/holders\\?token=NEAR`));
   });
 
   it('quote → call → dispute → status, then a restarted server continues the dispute', async () => {
@@ -131,7 +131,7 @@ describe('MCP server', () => {
 
   it('a contract rejection names its code, not the raw RPC JSON', async () => {
     const raw = 'claim_error failed: {"ActionError":{"index":0,"kind":{"FunctionCallError":{"ExecutionError":"Smart contract panicked: E_HTTP_STATUS"}}}}';
-    const c = await connect({ chain: Object.assign(chain.as('scout.test.near'), { claimError: async () => { throw new ContractError(raw, 'E_HTTP_STATUS'); } }) });
+    const c = await connect({ chain: Object.assign(chain.as('agent.test.near'), { claimError: async () => { throw new ContractError(raw, 'E_HTTP_STATUS'); } }) });
     try {
       const r = parse(await c.callTool({ name: TOOL_CALL, arguments: { url: `${base}/v1/holders?token=NEAR&n=3` } }));
       const e = parse(await c.callTool({ name: TOOL_DISPUTE, arguments: { call_id: r.call_id, kind: 'error' } }));
@@ -156,14 +156,14 @@ describe('certo-mcp entry point', () => {
     const home = mkdtempSync(join(tmpdir(), 'h-'));
     writeFileSync(join(home, 'playground.env'), [
       'NEAR_NETWORK=sandbox', 'NEAR_RPC_URL=http://127.0.0.1:9', 'CERTO_CONTRACT=certo.test.near', 'CERTO_TOKEN=usdc.test.near',
-      'BUYER_ACCOUNT=scout.test.near', `BUYER_PRIVATE_KEY=ed25519:${'1'.repeat(64)}`, 'PANEL_URL=http://127.0.0.1:9',
-      'CERTO_EXAMPLE_URLS=cheapfacts=http://127.0.0.1:9/v1/holders?token=NEAR',
+      'BUYER_ACCOUNT=agent.test.near', `BUYER_PRIVATE_KEY=ed25519:${'1'.repeat(64)}`, 'PANEL_URL=http://127.0.0.1:9',
+      'CERTO_EXAMPLE_URLS=shady-api=http://127.0.0.1:9/v1/holders?token=NEAR',
     ].join('\n'));
     const t = new StdioClientTransport({ command: process.execPath, args: [BIN, '--playground'], env: { PATH: process.env.PATH!, CERTO_HOME: home }, stderr: 'pipe' });
     const c = new Client({ name: 'test', version: '0' });
     await c.connect(t);
     try {
-      expect(c.getInstructions()).toMatch(/cheapfacts = http:\/\/127\.0\.0\.1:9\/v1\/holders\?token=NEAR/);
+      expect(c.getInstructions()).toMatch(/shady-api = http:\/\/127\.0\.0\.1:9\/v1\/holders\?token=NEAR/);
       const { tools } = await c.listTools();
       expect(tools.find((x) => x.name === TOOL_DISPUTE)!.inputSchema.properties).toHaveProperty('submit_to_panel.default', true);
     } finally {

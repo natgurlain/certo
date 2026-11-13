@@ -63,9 +63,9 @@ beforeAll(async () => {
     ...BUYERS.map((b) => m.mint(b, '10000000')),
   ]);
   const bodies: Record<string, string> = {
-    's-clean': fx.responses.chainfacts, 's-good': fx.responses.chainfacts, 's-bad': fx.responses.cheapfacts, 's-err': fx.responses.chainfacts, 's-rule': MISSING_FIELD_BODY,
+    's-clean': fx.responses['honest-api'], 's-good': fx.responses['honest-api'], 's-bad': fx.responses['shady-api'], 's-err': fx.responses['honest-api'], 's-rule': MISSING_FIELD_BODY,
   };
-  const extra: Record<string, Record<string, string>> = { 's-rule': { [FULL_PATH]: fx.responses.chainfacts } };
+  const extra: Record<string, Record<string, string>> = { 's-rule': { [FULL_PATH]: fx.responses['honest-api'] } };
   for (const reg of regs.slice(0, 5) as Awaited<ReturnType<typeof addSeller>>[]) {
     sellers[reg.id] = await startDemoSeller({
       id: reg.id, chain: reg.chain, receiptKey: reg.receiptKey, termsId: reg.id === 's-rule' ? 'rules-v1' : fx.terms.terms_id,
@@ -99,7 +99,7 @@ describe.concurrent('sandbox e2e', () => {
     traced.onTx = (method, tx) => { if (method === 'ft_transfer_call(pay)') payTx = tx; };
     const r = await new CertoClient({ chain: traced }).call(urlOf('s-clean'));
     expect(r.status).toBe(200);
-    expect(r.body).toBe(fx.responses.chainfacts);
+    expect(r.body).toBe(fx.responses['honest-api']);
     expect(simplePolicy(r).action).toBe('accept');
     expect(transfersTo(payTx!, 's-clean').map((t) => t.amount)).toEqual(['396000']);
     expect((await m.balance('s-clean')) - before).toBe(396_000n);

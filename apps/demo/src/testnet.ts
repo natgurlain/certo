@@ -26,7 +26,7 @@ export const DEFAULT_EXPLORER = 'https://testnet.nearblocks.io';
 /** Seller answer / cure window on testnet (DESIGN 4.2). */
 export const TESTNET_ANSWER_MS = 30_000;
 
-export type Role = 'owner' | 'contract' | 'token' | 'resolver' | 'chainfacts' | 'cheapfacts' | 'scout' | 'scout-liar';
+export type Role = 'owner' | 'contract' | 'token' | 'resolver' | 'honest-api' | 'shady-api' | 'agent' | 'liar-agent';
 
 interface RoleSpec {
   role: Role;
@@ -45,10 +45,10 @@ export const ROLES: RoleSpec[] = [
   { role: 'contract', idVar: `${P}CONTRACT`, keyVar: `${P}CONTRACT_PRIVATE_KEY`, def: `v1.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 5, what: `${PRODUCT_ID} contract (code storage ~3.5 NEAR)` },
   { role: 'token', idVar: `${P}TOKEN`, keyVar: `${P}TOKEN_PRIVATE_KEY`, def: `usdc.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 2, what: 'mock USDC token (code storage ~1.7 NEAR)' },
   { role: 'resolver', idVar: 'RESOLVER_ACCOUNT', keyVar: 'RESOLVER_PRIVATE_KEY', def: `resolver.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 0.5, what: 'panel resolver (submits resolve)' },
-  { role: 'chainfacts', idVar: 'SELLER_CHAINFACTS_ACCOUNT', keyVar: 'SELLER_CHAINFACTS_PRIVATE_KEY', def: `chainfacts.sellers.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 1.5, what: 'honest seller (1 NEAR registration deposit)' },
-  { role: 'cheapfacts', idVar: 'SELLER_CHEAPFACTS_ACCOUNT', keyVar: 'SELLER_CHEAPFACTS_PRIVATE_KEY', def: `cheapfacts.sellers.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 1.5, what: 'wrong-token seller (1 NEAR registration deposit)' },
-  { role: 'scout', idVar: 'BUYER_SCOUT_ACCOUNT', keyVar: 'BUYER_SCOUT_PRIVATE_KEY', def: `scout.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 0.5, what: 'buyer agent' },
-  { role: 'scout-liar', idVar: 'BUYER_SCOUT_LIAR_ACCOUNT', keyVar: 'BUYER_SCOUT_LIAR_PRIVATE_KEY', def: `scout-liar.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 0.5, what: 'lying buyer agent' },
+  { role: 'honest-api', idVar: 'SELLER_HONEST_API_ACCOUNT', keyVar: 'SELLER_HONEST_API_PRIVATE_KEY', def: `honest-api.sellers.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 1.5, what: 'honest seller (1 NEAR registration deposit)' },
+  { role: 'shady-api', idVar: 'SELLER_SHADY_API_ACCOUNT', keyVar: 'SELLER_SHADY_API_PRIVATE_KEY', def: `shady-api.sellers.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 1.5, what: 'wrong-token seller (1 NEAR registration deposit)' },
+  { role: 'agent', idVar: 'BUYER_AGENT_ACCOUNT', keyVar: 'BUYER_AGENT_PRIVATE_KEY', def: `agent.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 0.5, what: 'buyer agent' },
+  { role: 'liar-agent', idVar: 'BUYER_LIAR_AGENT_ACCOUNT', keyVar: 'BUYER_LIAR_AGENT_PRIVATE_KEY', def: `liar-agent.${PRODUCT_ID}.testnet`, keyRequired: true, minNear: 0.5, what: 'lying buyer agent' },
 ];
 
 export interface TestnetAccount {
@@ -302,7 +302,7 @@ export function jurorsForPlan(plan: PanelPlan, env: NodeJS.ProcessEnv = process.
 }
 
 export interface Deployed {
-  receiptKeys: Record<'chainfacts' | 'cheapfacts', Ed25519Key>;
+  receiptKeys: Record<'honest-api' | 'shady-api', Ed25519Key>;
   txs: Array<{ what: string; hash: string }>;
 }
 
@@ -390,7 +390,7 @@ export async function ensureDeployed(cfg: TestnetConfig, want: JurorWant, log: (
 
   const fx = loadDemo();
   const receiptKeys = {} as Deployed['receiptKeys'];
-  for (const role of ['chainfacts', 'cheapfacts'] as const) {
+  for (const role of ['honest-api', 'shady-api'] as const) {
     const id = A[role].accountId;
     const c = client(role);
     const key = sellerReceiptKey(A[role].privateKey!);
@@ -412,7 +412,7 @@ export async function ensureDeployed(cfg: TestnetConfig, want: JurorWant, log: (
     }
     log(`seller ${role} ${id}: bond ${formatUsdc((await viewer.getSeller(id))!.bond)}`);
   }
-  for (const role of ['scout', 'scout-liar'] as const) {
+  for (const role of ['agent', 'liar-agent'] as const) {
     const id = A[role].accountId;
     const missing = BigInt(DEMO_BUYER_FUNDS) - BigInt(await viewer.ftBalanceOf(id));
     if (missing > 0n) note(`mint ${formatUsdc(missing)} to ${role}`, (await client(role).call('mint', { account_id: id, amount: missing.toString() }, { receiverId: A.token.accountId, gas: 30n * TGAS })).txHash);
@@ -444,7 +444,7 @@ export function testnetWorld(cfg: TestnetConfig, d: Deployed): DemoWorld {
       const b = await rateLimitRetry(() => provider.viewBlock({ finality: 'optimistic' }));
       return Math.floor(Number(BigInt(b.header.timestamp_nanosec) / 1_000_000n));
     },
-    receiptKey: (label) => d.receiptKeys[label as 'chainfacts' | 'cheapfacts'] ?? (() => { throw new Error(`no receipt key for ${label}`); })(),
+    receiptKey: (label) => d.receiptKeys[label as 'honest-api' | 'shady-api'] ?? (() => { throw new Error(`no receipt key for ${label}`); })(),
     txUrl: (h) => `${cfg.explorerUrl}/txns/${h}`,
     stop: async () => undefined,
   };

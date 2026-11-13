@@ -34,28 +34,28 @@ let panelServer: Server;
 let url = '';
 
 beforeAll(async () => {
-  chain = await LocalChain.start(['mg', 'usdc', 'owner', 'resolver', 'cheapfacts', 'scout', 'newseller']);
+  chain = await LocalChain.start(['mg', 'usdc', 'owner', 'resolver', 'shady-api', 'agent', 'newseller']);
   m = await deployMarket({
     chain, contract: 'mg', token: 'usdc', owner: 'owner', resolver: 'resolver', wasm: 'res/certo.wasm', deployToken: true,
     jurors: plan.jurors, gatewayKey: plan.gatewayKey, acceptGateway: plan.acceptGateway,
   });
   const [reg] = await Promise.all([
-    addSeller(m, { id: 'cheapfacts', bond: '50000000', terms: [{ terms_id: fx.terms.terms_id, text: fx.terms.text, panel: true }] }),
-    m.mint('scout', '10000000'),
+    addSeller(m, { id: 'shady-api', bond: '50000000', terms: [{ terms_id: fx.terms.terms_id, text: fx.terms.text, panel: true }] }),
+    m.mint('agent', '10000000'),
     m.mint('newseller', '60000000'),
   ]);
   seller = await startDemoSeller({
-    id: 'cheapfacts', chain: reg.chain, receiptKey: reg.receiptKey, termsId: fx.terms.terms_id, price: fx.price,
-    responses: { [fx.request]: fx.responses.cheapfacts },
+    id: 'shady-api', chain: reg.chain, receiptKey: reg.receiptKey, termsId: fx.terms.terms_id, price: fx.price,
+    responses: { [fx.request]: fx.responses['shady-api'] },
   });
   const app = createPanelApp(new PanelService({ chain: m.client('resolver'), jurors: new ReplayJurors(repoFile('fixtures/panel')) }));
   panelServer = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
   url = `${seller.url}${fx.request}`;
-  const scout = chain.key('scout');
+  const agent = chain.key('agent');
   writeFileSync(join(home, 'playground.env'), [
     'NEAR_NETWORK=sandbox', `NEAR_RPC_URL=${chain.rpcUrl}`, 'CERTO_CONTRACT=mg', 'CERTO_TOKEN=usdc',
-    `BUYER_ACCOUNT=${scout.accountId}`, `BUYER_PRIVATE_KEY=${scout.privateKey}`,
-    `PANEL_URL=http://127.0.0.1:${(panelServer.address() as AddressInfo).port}`, `CERTO_EXAMPLE_URLS=cheapfacts=${url}`,
+    `BUYER_ACCOUNT=${agent.accountId}`, `BUYER_PRIVATE_KEY=${agent.privateKey}`,
+    `PANEL_URL=http://127.0.0.1:${(panelServer.address() as AddressInfo).port}`, `CERTO_EXAMPLE_URLS=shady-api=${url}`,
   ].join('\n'));
 }, 300_000);
 
@@ -77,16 +77,16 @@ const parse = (r: unknown) => JSON.parse((r as { content: Array<{ text: string }
 describe('sandbox e2e through certo-mcp --playground', () => {
   it('quote → call → restart → dispute returns the refund in one call', async () => {
     let c = await mcp();
-    expect(c.getInstructions()).toContain(`cheapfacts = ${url}`);
+    expect(c.getInstructions()).toContain(`shady-api = ${url}`);
     const q = parse(await c.callTool({ name: 'certo_quote', arguments: { url } }));
-    expect(q).toMatchObject({ seller: 'cheapfacts', price_usdc: '0.400000', payable: true, dispute_stake_usdc: '0.020000',
+    expect(q).toMatchObject({ seller: 'shady-api', price_usdc: '0.400000', payable: true, dispute_stake_usdc: '0.020000',
       seller_record: { bond_usdc: '50.000000', free_capacity_usdc: '50.000000', fee_pct: 1, lost_disputes: 0, split_disputes: 0 }, terms: { text: fx.terms.text } });
     const call = parse(await c.callTool({ name: 'certo_call', arguments: { url } }));
     expect(call).toMatchObject({ http_status: 200, price_usdc: '0.400000', receipt_verified: true, suggested: { action: 'dispute' } });
-    expect(call.body).toBe(fx.responses.cheapfacts);
+    expect(call.body).toBe(fx.responses['shady-api']);
     await c.close(); // the MCP server restarts inside the refund window
     c = await mcp();
-    const b0 = await m.balance('scout');
+    const b0 = await m.balance('agent');
     const t0 = Date.now();
     const d = parse(await c.callTool({ name: 'certo_dispute', arguments: { call_id: call.call_id } }, undefined, { timeout: 120_000 }));
     expect(d).toMatchObject({
@@ -95,8 +95,8 @@ describe('sandbox e2e through certo-mcp --playground', () => {
       outcome: { result: 'refunded', refund_usdc: '0.400000', stake_back_usdc: '0.020000', stake_lost_usdc: '0.000000', tier: 'panel', winner: 'buyer' },
     });
     expect(Date.now() - t0).toBeLessThan(90_000);
-    expect(await m.balance('scout') - b0).toBe(400_000n); // price back; the stake went out and came back
-    const s = parse(await c.callTool({ name: 'certo_status', arguments: { call_id: call.call_id, seller: 'cheapfacts' } }));
+    expect(await m.balance('agent') - b0).toBe(400_000n); // price back; the stake went out and came back
+    const s = parse(await c.callTool({ name: 'certo_status', arguments: { call_id: call.call_id, seller: 'shady-api' } }));
     expect(s).toMatchObject({ state: 'refunded', seller: { lost_disputes: 1, fee_pct: 1.5 } });
     await c.close();
   }, 180_000);
@@ -138,7 +138,7 @@ describe('sandbox e2e through certo-mcp --playground', () => {
     app.get('/v1/answer', protect({ contract: m.client('newseller'), seller: 'newseller', termsId: 'v1', price: '250000', receiptKey: fromHex(keyHex) }), (_q, r) => void r.json({ answer: 42 }));
     const srv: Server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
     try {
-      const q = await new CertoClient({ chain: m.client('scout') }).quote(`http://127.0.0.1:${(srv.address() as AddressInfo).port}/v1/answer`);
+      const q = await new CertoClient({ chain: m.client('agent') }).quote(`http://127.0.0.1:${(srv.address() as AddressInfo).port}/v1/answer`);
       expect(q).toMatchObject({ seller: 'newseller', price: '250000', problems: [], terms: { text: 'Returns {"answer": 42} as JSON.', panel: false } });
     } finally {
       srv.close();
