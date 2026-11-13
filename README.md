@@ -4,7 +4,7 @@
 
 **Your AI agent paid for a bad API answer. Certo gets the money back.** Guards try to stop a bad agent payment; Certo refunds one that went through. Built at NEAR HACKATHON (November 2026).
 
-**Check it in 10 seconds:** [certo-near.vercel.app/verify](https://certo-near.vercel.app/verify) (your browser reads NEAR testnet and re-checks a real refund) · **replay, 2 min:** [/demo](https://certo-near.vercel.app/demo) · **video, 60 s:** [watch](https://certo-near.vercel.app/certo-demo.mp4) · **the refund on testnet:** [2gK7DmMK…](https://testnet.nearblocks.io/txns/2gK7DmMKTdM21Nhqzri8oDW5dH8kPWvvLCVEPQcecCE8) <!-- FILL: X post with the video -->
+**Check it in 10 seconds:** [certo-near.vercel.app/verify](https://certo-near.vercel.app/verify) (your browser reads NEAR testnet and re-checks a real refund) · **replay, 2 min:** [/demo](https://certo-near.vercel.app/demo) · **video, 60 s:** [watch](https://certo-near.vercel.app/certo-demo.mp4) · **the refund on testnet:** [2gK7DmMK…](https://testnet.nearblocks.io/txns/2gK7DmMKTdM21Nhqzri8oDW5dH8kPWvvLCVEPQcecCE8) · **X post:** [x.com/natgurlain](https://x.com/natgurlain/status/2121241362180002167)
 
 ![Certo: the agent's 0.40 comes back out of the seller's bond](apps/landing/og.png)
 
