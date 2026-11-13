@@ -11,7 +11,7 @@ const here = (p: string) => new URL(p, import.meta.url);
 const FEED = JSON.parse(readFileSync(here('../../../fixtures/demo/feed-testnet.json'), 'utf8'));
 // Real testnet RPC answers for the scene 2 dispute, recorded once (see `source` in the file).
 const RECORDED: Rec[] = JSON.parse(readFileSync(here('./fixtures/rpc-scene2-testnet.json'), 'utf8')).responses;
-const RESOLVE_TX = 'GvLdsJhSThMtC8M86ZkQ4wNxGsFaNV9Ny3234MsuLzBn';
+const RESOLVE_TX = '2gK7DmMKTdM21Nhqzri8oDW5dH8kPWvvLCVEPQcecCE8';
 
 /** A fetch that answers JSON-RPC from the recording; `tweak` may rewrite a response or reply with an HTTP status. */
 function replayFetch(recs: Rec[], tweak: (url: string, method: string, params: any, n: number) => number | undefined = () => undefined) {

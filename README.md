@@ -11,7 +11,7 @@
 ![Scene 2: asked NEAR, got NEO; three signed votes, verified in the browser and by the contract; refund from the bond](apps/demo/web/screenshots/scene2-end.png)
 
 [github.com/natgurlain/certo](https://github.com/natgurlain/certo) · **watch the replay:** [certo-bice.vercel.app](https://certo-bice.vercel.app) (the NEAR testnet run; press **Don't trust this page: verify on NEAR testnet** and your browser reads the contract and the ruling from the testnet RPC and re-checks the three signatures itself; [local run with all five scenes](https://certo-bice.vercel.app/?feed=local.json)) <!-- FILL: X post with the video -->
-MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt) · **live on NEAR testnet:** [a refund decided by three verified NEAR AI signatures](https://testnet.nearblocks.io/txns/GvLdsJhSThMtC8M86ZkQ4wNxGsFaNV9Ny3234MsuLzBn) ([all transactions](#7-testnet))
+MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt) · **live on NEAR testnet:** [a refund decided by three verified NEAR AI signatures](https://testnet.nearblocks.io/txns/2gK7DmMKTdM21Nhqzri8oDW5dH8kPWvvLCVEPQcecCE8) ([all transactions](#7-testnet))
 
 ## Try it
 
@@ -170,15 +170,15 @@ Under the rule set before the runs, a failed injection check alone means refunds
 
 ## 7. Testnet
 
-Run on NEAR testnet on 2026-11-13 with the final contract (`res/certo.wasm`, SHA-256 `aca96429…`) and the real recorded NEAR AI ballots: `DEMO OK: 4/4 scenes, 3/3 juror signatures verified on chain` in 116 s. The seller's answer window is 30 s on testnet. Fee tiers in this run start higher because the testnet sellers keep their record from earlier runs. Procedure: [docs/TESTNET.md](docs/TESTNET.md).
+Run on NEAR testnet on 2026-11-13 with the final contract (`res/certo.wasm`, SHA-256 `aca96429…`) and the real recorded NEAR AI ballots: `DEMO OK: 4/4 scenes, 3/3 juror signatures verified on chain` in 130 s. The seller's answer window is 30 s on testnet. Procedure: [docs/TESTNET.md](docs/TESTNET.md).
 
 | What | Transaction |
 |---|---|
 | Contract `v1.certo.testnet` (deploy, juror keys from `fixtures/jurors.json`) | [account](https://testnet.nearblocks.io/address/v1.certo.testnet) · [deploy](https://testnet.nearblocks.io/txns/HJCycfj6bS43NjhHXv6pgpALunyHDwvfCicxREEfUz1n) |
-| Scene 1: pay, seller paid in the same transaction | [A77FrZrM…](https://testnet.nearblocks.io/txns/A77FrZrMSisUiXfs95aiSbcCvezxC7gL7ryYaEJ8mYd3) |
-| Scene 2: `resolve`, three NEAR AI signatures verified, refund 0.40 to the buyer (`ballots_verified`, `dispute_resolved` tier `panel`) | [GvLdsJhS…](https://testnet.nearblocks.io/txns/GvLdsJhSThMtC8M86ZkQ4wNxGsFaNV9Ny3234MsuLzBn) |
-| Scene 3: `resolve`, panel for the seller, lying buyer's stake forfeited | [EMgb4xaK…](https://testnet.nearblocks.io/txns/EMgb4xaKY6pmbPAW7A5McJvN486NjgnsJk5d8Wum6Xxe) |
-| Scene 4: `resolve_default`, seller did not answer, refund by rule | [38EC8Zxw…](https://testnet.nearblocks.io/txns/38EC8ZxwEeuFU12bFrmjn4oUtA9rnWixVXZ2dYcXLq6K) |
+| Scene 1: pay, seller paid in the same transaction | [CydwoN9L…](https://testnet.nearblocks.io/txns/CydwoN9LdNmQQXzj4v4JGjQnqMuwuoikWynQ2naoKa6u) |
+| Scene 2: `resolve`, three NEAR AI signatures verified, refund 0.40 to the buyer (`ballots_verified`, `dispute_resolved` tier `panel`) | [2gK7DmMK…](https://testnet.nearblocks.io/txns/2gK7DmMKTdM21Nhqzri8oDW5dH8kPWvvLCVEPQcecCE8) |
+| Scene 3: `resolve`, panel for the seller, lying buyer's stake forfeited | [8LBY5hjP…](https://testnet.nearblocks.io/txns/8LBY5hjPV8nphMXkn2fbJoRN5K1jFmnSGNZK39uRVTHS) |
+| Scene 4: `resolve_default`, seller did not answer, refund by rule | [6XJsXCQg…](https://testnet.nearblocks.io/txns/6XJsXCQgaRKamn66DtSFwije29dvwdBNiWFix92226vo) |
 
 ![The hosted replay re-checking the scene 2 ruling against NEAR testnet from the browser](apps/demo/web/screenshots/verify-testnet.png)
 
