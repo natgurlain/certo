@@ -10,7 +10,7 @@
 
 ![Scene 2: asked NEAR, got NEO; three signed votes, verified in the browser and by the contract; refund from the bond](apps/demo/web/screenshots/scene2-end.png)
 
-[github.com/natgurlain/certo](https://github.com/natgurlain/certo) · **site:** [certo-bice.vercel.app](https://certo-bice.vercel.app) · **watch the replay:** [/demo](https://certo-bice.vercel.app/demo) (the NEAR testnet run; [local run with all five scenes](https://certo-bice.vercel.app/demo?feed=local.json)) · **check it yourself:** [/verify](https://certo-bice.vercel.app/verify) (your browser reads the contract and the ruling from the testnet RPC and re-checks the three signatures itself) <!-- FILL: X post with the video -->
+[github.com/natgurlain/certo](https://github.com/natgurlain/certo) · **site:** [certo-near.vercel.app](https://certo-near.vercel.app) · **watch the replay:** [/demo](https://certo-near.vercel.app/demo) (the NEAR testnet run; [local run with all five scenes](https://certo-near.vercel.app/demo?feed=local.json)) · **check it yourself:** [/verify](https://certo-near.vercel.app/verify) (your browser reads the contract and the ruling from the testnet RPC and re-checks the three signatures itself) <!-- FILL: X post with the video -->
 MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt) · **live on NEAR testnet:** [a refund decided by three verified NEAR AI signatures](https://testnet.nearblocks.io/txns/2gK7DmMKTdM21Nhqzri8oDW5dH8kPWvvLCVEPQcecCE8) ([all transactions](#7-testnet))
 
 ## Try it
