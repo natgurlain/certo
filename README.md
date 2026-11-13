@@ -8,7 +8,7 @@
 
 ![Scene 2: asked NEAR, got NEO; three signed votes, verified in the browser and by the contract; refund from the bond](apps/demo/web/screenshots/scene2-end.png)
 
-[github.com/natgurlain/certo](https://github.com/natgurlain/certo) <!-- FILL: X post with the 60 s video · hosted replay URL (or delete) -->
+[github.com/natgurlain/certo](https://github.com/natgurlain/certo) · **watch the replay:** [certo-bice.vercel.app](https://certo-bice.vercel.app) (the NEAR testnet run; [local run with all five scenes](https://certo-bice.vercel.app/?feed=local.json)) <!-- FILL: X post with the video -->
 MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt) · **live on NEAR testnet:** [a refund decided by three verified NEAR AI signatures](https://testnet.nearblocks.io/txns/GvLdsJhSThMtC8M86ZkQ4wNxGsFaNV9Ny3234MsuLzBn) ([all transactions](#7-testnet))
 
 ## Try it
