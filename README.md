@@ -1,5 +1,7 @@
 # Certo
 
+[![ci](https://github.com/natgurlain/certo/actions/workflows/ci.yml/badge.svg)](https://github.com/natgurlain/certo/actions/workflows/ci.yml)
+
 **Agents pay instantly. Bad calls get refunded.** Guards try to stop a bad agent payment; Certo gets the money back when one goes through. Built at NEAR HACKATHON (November 2026).
 
 - A seller of a paid API locks a bond in a NEAR contract and is **paid in the buyer's own transaction**. No escrow, no waiting.
@@ -13,7 +15,7 @@ MIT ([LICENSE](LICENSE)) · for agents: [llms.txt](llms.txt) · **live on NEAR t
 
 ## Try it
 
-Node 20 or 22 on macOS arm64 or Linux x86-64 (npm may print an `EBADENGINE` warning because `near-sandbox` declares Node 22.22.2; it runs on 20 and 22.16). Linux x86-64 was checked with NEAR's x86-64 sandbox binary under qemu on glibc 2.36 (all steps pass), not on native x86-64 hardware ([platform notes](docs/CONTRACT_NOTES.md)). No keys, no accounts, no Rust. The first run downloads a 26–33 MB NEAR sandbox binary ([platform notes](docs/CONTRACT_NOTES.md)).
+Node 20 or 22 on macOS arm64 or Linux x86-64 (npm may print an `EBADENGINE` warning because `near-sandbox` declares Node 22.22.2; it runs on 20 and 22.16). CI runs `make demo`, `make verify`, `make guards` and `make test` on Ubuntu 22.04 x86-64 from a clean checkout on every push (first green run 2026-11-13: 2 min 19 s; [platform notes](docs/CONTRACT_NOTES.md)). No keys, no accounts, no Rust. The first run downloads a 26–33 MB NEAR sandbox binary ([platform notes](docs/CONTRACT_NOTES.md)).
 
 ```sh
 npm ci

@@ -92,7 +92,7 @@ the sandbox version it runs.
 under emulation, hence the 300 s per-guard limit and `GUARD_TIMEOUT_S`), `make verify`, `make test`
 209/209. Native arm64 `node:20-trixie` (glibc 2.41): the same, all pass. Under Docker Desktop's
 default **Rosetta** amd64 emulation the x86-64 sandbox panics at `rustix auxv.rs:302` (the
-emulator's auxiliary vector), an emulator artefact. No run on native x86-64 hardware.
+emulator's auxiliary vector), an emulator artefact. **Native x86-64:** GitHub Actions `ubuntu-22.04` (glibc 2.35), clean checkout, 2026-11-13 (run 43426231788): `make demo` 5/5, `make verify` 375 real ballots, `make guards` 10/10 in 53 s, `make test` all pass; 2 min 19 s in all.
 
 **Current build** (split rule G17, panel-timeout rule G16 and the panel request's `max_tokens`
 4096): `certo.wasm` 356,230 bytes, SHA-256 `aca96429481139397fe5e265659a9fe9a85093dddf827766d58c189ec7299b71`;
